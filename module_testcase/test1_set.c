@@ -1,11 +1,11 @@
-// *************************************** RSET for 10000 times ******************
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
-
-
+// *************************************** SET for 10000 times ******************
+// **************** testcase for log module ****************
 #define MAX_MSG_LENGTH		1024
 #define TIME_SUB_MS(tv1, tv2)  ((tv1.tv_sec - tv2.tv_sec) * 1000 + (tv1.tv_usec - tv2.tv_usec) / 1000)
 
@@ -87,7 +87,7 @@ void rbtree_testcase_1w(int connfd) {
 
 		char cmd[128] = {0};
 		snprintf(cmd, 128, "RSET Teacher%d King%d", i, i);
-		testcase(connfd, cmd, "OK\r\n", "RSET-Teacher");
+		testcase(connfd, cmd, "OK\r\n", cmd);
 	}
 
 	struct timeval tv_end;
@@ -98,23 +98,72 @@ void rbtree_testcase_1w(int connfd) {
 	printf("rbtree testcase --> time_used: %d, qps: %d\n", time_used, 10000 * 1000 / time_used);
 
 }
+void array_testcase_1w(int connfd) {
+
+	int count = 10000;
+	int i = 0;
+
+	struct timeval tv_begin;
+	gettimeofday(&tv_begin, NULL);
+
+	for (i = 0;i < count;i ++) {
+
+		char cmd[128] = {0};
+		snprintf(cmd, 128, "SET Teacher%d King%d", i, i);
+		testcase(connfd, cmd, "OK\r\n", cmd);
+	}
+
+	struct timeval tv_end;
+	gettimeofday(&tv_end, NULL);
+
+	int time_used = TIME_SUB_MS(tv_end, tv_begin); // ms
+
+	printf("array testcase --> time_used: %d, qps: %d\n", time_used, 10000 * 1000 / time_used);
+
+}
+void hash_testcase_1w(int connfd) {
+
+	int count = 10000;
+	int i = 0;
+
+	struct timeval tv_begin;
+	gettimeofday(&tv_begin, NULL);
+
+	for (i = 0;i < count;i ++) {
+
+		char cmd[128] = {0};
+		snprintf(cmd, 128, "HSET Teacher%d King%d", i, i);
+		testcase(connfd, cmd, "OK\r\n", cmd);
+	}
+
+	struct timeval tv_end;
+	gettimeofday(&tv_end, NULL);
+
+	int time_used = TIME_SUB_MS(tv_end, tv_begin); // ms
+
+	printf("hash testcase --> time_used: %d, qps: %d\n", time_used, 10000 * 1000 / time_used);
+
+}
 
 
 
-// testcase 192.168.243.131  2000
+// testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash 
 int main(int argc, char *argv[]) {
 
-	if (argc != 3) {
+	if (argc != 4) {
 		printf("arg error\n");
 		return -1;
 	}
 
 	char *ip = argv[1];
 	int port = atoi(argv[2]);
+	int mode = atoi(argv[3]);
 
 	int connfd = connect_tcpserver(ip, port);
 
-	rbtree_testcase_1w(connfd);
+	if(mode == 0) rbtree_testcase_1w(connfd);
+	else if(mode == 1) array_testcase_1w(connfd);
+	else if (mode == 2) hash_testcase_1w(connfd);
 
 
 	return 0;

@@ -7,10 +7,16 @@ TARGET = kvstore
 SUBDIR = ./NtyCo/
 TESTCASE = testcase
 
+TESTCASE1.1 = test1_set
+TESTCASE1.1_SRCS = ./module_testcase/test1_set.c
+
+TESTCASE1.2 = test1_get
+TESTCASE1.2_SRCS = ./module_testcase/test1_get.c
+
 OBJS = $(SRCS:.c=.o)
 
 
-all: $(SUBDIR) $(TARGET) $(TESTCASE)
+all: $(SUBDIR) $(TARGET) $(TESTCASE) $(TESTCASE1.1) $(TESTCASE1.2)
 
 $(SUBDIR): ECHO
 	make -C $@
@@ -24,10 +30,16 @@ $(TARGET): $(OBJS)
 $(TESTCASE): $(TESTCASE_SRCS)
 	$(CC) -o $@ $^
 
+$(TESTCASE1.1): $(TESTCASE1.1_SRCS)
+	$(CC) -o $@ $^
+
+$(TESTCASE1.2): $(TESTCASE1.2_SRCS)
+	$(CC) -o $@ $^	
+
 %.o: %.c
 	$(CC) $(FLAGS) -c $^ -o $@
 
 clean: 
-	rm -rf $(OBJS) $(TARGET) $(TESTCASE)
+	rm -rf $(OBJS) $(TARGET) $(TESTCASE) $(TESTCASE1.1) $(TESTCASE1.2)
 
 
