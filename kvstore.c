@@ -56,7 +56,7 @@ enum {
 	KVS_CMD_COUNT,
 };
 
-
+int is_reading_log = 1;
 
 const char *response[] = {
 
@@ -110,6 +110,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
+			if(is_reading_log == 0) kvs_log_write(LOG_ARRAY, "SET", key, value);
 		} else {
 			length = sprintf(response, "EXIST\r\n");
 		} 
@@ -130,6 +131,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
+			if(is_reading_log == 0) kvs_log_write(LOG_ARRAY, "DEL", key, "");
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -140,6 +142,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
+			if(is_reading_log == 0) kvs_log_write(LOG_ARRAY, "MOD", key, value);
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -161,6 +164,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
+			if(is_reading_log == 0) kvs_log_write(LOG_RBTREE, "RSET", key, value);
 		} else {
 			length = sprintf(response, "EXIST\r\n");
 		} 
@@ -181,6 +185,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
+			if(is_reading_log == 0) kvs_log_write(LOG_RBTREE, "RDEL", key, "");
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -191,6 +196,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
+			if(is_reading_log == 0) kvs_log_write(LOG_RBTREE, "RMOD", key, value);
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -211,6 +217,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
+			if(is_reading_log == 0) kvs_log_write(LOG_HASH, "HSET", key, value);
 		} else {
 			length = sprintf(response, "EXIST\r\n");
 		} 
@@ -231,6 +238,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
+			if(is_reading_log == 0) kvs_log_write(LOG_HASH, "HDEL", key, "");
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -241,6 +249,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
+			if(is_reading_log == 0) kvs_log_write(LOG_HASH, "HMOD", key, value);
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -333,7 +342,8 @@ int main(int argc, char *argv[]) {
 
 	init_kvengine();
 	
-	
+	kvs_log_init(kvs_protocol);
+
 #if (NETWORK_SELECT == NETWORK_REACTOR)
 	reactor_start(port, kvs_protocol);  //
 #elif (NETWORK_SELECT == NETWORK_PROACTOR)
@@ -343,7 +353,8 @@ int main(int argc, char *argv[]) {
 #endif
 
 	dest_kvengine();
-
+	
+	kvs_log_close();
 }
 
 

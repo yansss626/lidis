@@ -22,10 +22,11 @@
 
 #define KVS_MAX_TOKENS		128
 
-#define ENABLE_ARRAY		1
+#define ENABLE_ARRAY		0
 #define ENABLE_RBTREE		1
-#define ENABLE_HASH			1
+#define ENABLE_HASH			0
 
+#define ENABLE_MODULE_LOG	1
 
 typedef int (*msg_handler)(char *msg, int length, char *response);
 
@@ -156,7 +157,25 @@ int kvs_hash_exist(kvs_hash_t *hash, char *key);
 void *kvs_malloc(size_t size);
 void kvs_free(void *ptr);
 
+#if ENABLE_MODULE_LOG
 
+	typedef enum{
+		LOG_ARRAY = 0,
+		LOG_HASH,
+		LOG_RBTREE
+	}KVS_LOG_TYPE;
+
+	int kvs_log_init(msg_handler handler);
+	int kvs_log_write(KVS_LOG_TYPE cmd_type, char * kvs_cmd, char * key, char * value);
+	int kvs_log_close();
+
+#else
+
+	#define kvs_log_init(handler) (0)
+	#define kvs_log_write(cmd_type, kvs_cmd, key, value) (0)
+	#define kvs_log_close() (0)
+
+#endif
 
 
 #endif

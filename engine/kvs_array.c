@@ -2,7 +2,7 @@
 
 #include "kvstore.h"
 
-
+#if ENABLE_ARRAY
 // singleton
 
 kvs_array_t global_array = {0};
@@ -110,7 +110,10 @@ int kvs_array_del(kvs_array_t *inst, char *key) {
 
 	int i = 0;
 	for (i = 0;i < inst->total;i ++) {
-
+		
+		if (inst->table[i].key == NULL) {
+			continue;
+		}
 		if (strcmp(inst->table[i].key, key) == 0) {
 
 			kvs_free(inst->table[i].key);
@@ -186,4 +189,4 @@ int kvs_array_exist(kvs_array_t *inst, char *key) {
 	return 0;
 }
 
-
+#endif

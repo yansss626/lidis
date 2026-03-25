@@ -8,6 +8,8 @@
 
 #include "kvstore.h"
 
+#if ENABLE_RBTREE
+
 rbtree_node *rbtree_mini(rbtree *T, rbtree_node *x) {
 	while (x->left != T->nil) {
 		x = x->left;
@@ -551,3 +553,4 @@ int kvs_rbtree_exist(kvs_rbtree_t *inst, char *key) {
 }
 
 
+#endif

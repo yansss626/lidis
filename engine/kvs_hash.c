@@ -13,7 +13,7 @@
 // Key, Value --> 
 // Modify 
 
-
+#if ENABLE_HASH
 
 kvs_hash_t global_hash;
 
@@ -283,3 +283,4 @@ int main() {
 #endif
 
 
+#endif
