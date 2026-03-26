@@ -8,7 +8,7 @@ static FILE * fp_array = NULL;
 static FILE * fp_hash = NULL;
 static FILE * fp_rbtree = NULL;
 
-extern int is_reading_log;
+
 msg_handler kvs_handler;
 
 int kvs_log_read(FILE * fp){
@@ -50,8 +50,7 @@ int kvs_log_init(msg_handler handler){
     fseek(fp_rbtree, 0, SEEK_SET);
     kvs_log_read(fp_rbtree);
 #endif
-    
-    is_reading_log = 0;
+
     return 0;
 
 }

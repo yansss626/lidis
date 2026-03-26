@@ -106,10 +106,13 @@ void rbtree_testcase_100(int connfd) {
 
 	for (i = 0;i < count;i ++) {
 
+		char cmd[128] = {0};
+		snprintf(cmd, 128, "HSET Teacher%d King2222%d", i, i);
+		testcase(connfd, cmd, "OK\r\n", "HSET-Teacher");
+	}
 	char cmd[128] = {0};
-	snprintf(cmd, 128, "RGET Teacher%d King%d", i, i);
-	testcase(connfd, cmd, "OK\r\n", "RSET-Teacher");
-}
+	snprintf(cmd, 128, "HSAVE");
+	testcase(connfd, cmd, "OK\r\n", "HSAVE");
 
 
 

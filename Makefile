@@ -1,7 +1,7 @@
 
 CC = gcc
 FLAGS = -I ./NtyCo/core/ -I ./ -L ./NtyCo/ -lntyco -lpthread -luring -ldl
-SRCS = kvstore.c ./server/ntyco.c ./server/proactor.c ./engine/kvs_array.c ./engine/kvs_rbtree.c ./engine/kvs_hash.c ./server/reactor.c ./modules/kvs_log.c
+SRCS = kvstore.c ./server/ntyco.c ./server/proactor.c ./engine/kvs_array.c ./engine/kvs_rbtree.c ./engine/kvs_hash.c ./server/reactor.c ./modules/kvs_log.c ./modules/kvs_save.c
 TESTCASE_SRCS = testcase.c
 TARGET = kvstore
 SUBDIR = ./NtyCo/

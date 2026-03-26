@@ -27,9 +27,9 @@ void kvs_free(void *ptr) {
 
 
 const char *command[] = {
-	"SET", "GET", "DEL", "MOD", "EXIST",
-	"RSET", "RGET", "RDEL", "RMOD", "REXIST",
-	"HSET", "HGET", "HDEL", "HMOD", "HEXIST"
+	"SET", "GET", "DEL", "MOD", "EXIST", "SAVE",
+	"RSET", "RGET", "RDEL", "RMOD", "REXIST", "RSAVE",
+	"HSET", "HGET", "HDEL", "HMOD", "HEXIST", "HSAVE"
 };
 
 enum {
@@ -40,23 +40,26 @@ enum {
 	KVS_CMD_DEL,
 	KVS_CMD_MOD,
 	KVS_CMD_EXIST,
+	KVS_CMD_SAVE,
 	// rbtree
 	KVS_CMD_RSET,
 	KVS_CMD_RGET,
 	KVS_CMD_RDEL,
 	KVS_CMD_RMOD,
 	KVS_CMD_REXIST,
+	KVS_CMD_RSAVE,
 	// hash
 	KVS_CMD_HSET,
 	KVS_CMD_HGET,
 	KVS_CMD_HDEL,
 	KVS_CMD_HMOD,
 	KVS_CMD_HEXIST,
+	KVS_CMD_HSAVE,
 	
 	KVS_CMD_COUNT,
 };
 
-int is_reading_log = 1;
+int is_recovering = 1;
 
 const char *response[] = {
 
@@ -110,7 +113,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
-			if(is_reading_log == 0) kvs_log_write(LOG_ARRAY, "SET", key, value);
+			if(is_recovering == 0) kvs_log_write(LOG_ARRAY, "SET", key, value);
 		} else {
 			length = sprintf(response, "EXIST\r\n");
 		} 
@@ -131,7 +134,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
-			if(is_reading_log == 0) kvs_log_write(LOG_ARRAY, "DEL", key, "");
+			if(is_recovering == 0) kvs_log_write(LOG_ARRAY, "DEL", key, "");
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -142,7 +145,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
-			if(is_reading_log == 0) kvs_log_write(LOG_ARRAY, "MOD", key, value);
+			if(is_recovering == 0) kvs_log_write(LOG_ARRAY, "MOD", key, value);
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -155,6 +158,14 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
 		break;
+	case KVS_CMD_SAVE:
+		ret = kvs_save_write(&global_array, SAVE_ARRAY);
+		if (ret == 0) {
+			length = sprintf(response, "OK\r\n");
+		} else {
+			length = sprintf(response, "ERROR\r\n");
+		}
+		break;
 #endif
 	// rbtree
 #if ENABLE_RBTREE
@@ -164,7 +175,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
-			if(is_reading_log == 0) kvs_log_write(LOG_RBTREE, "RSET", key, value);
+			if(is_recovering == 0) kvs_log_write(LOG_RBTREE, "RSET", key, value);
 		} else {
 			length = sprintf(response, "EXIST\r\n");
 		} 
@@ -185,7 +196,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
-			if(is_reading_log == 0) kvs_log_write(LOG_RBTREE, "RDEL", key, "");
+			if(is_recovering == 0) kvs_log_write(LOG_RBTREE, "RDEL", key, "");
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -196,7 +207,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
-			if(is_reading_log == 0) kvs_log_write(LOG_RBTREE, "RMOD", key, value);
+			if(is_recovering == 0) kvs_log_write(LOG_RBTREE, "RMOD", key, value);
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -209,6 +220,14 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
 		break;
+	case KVS_CMD_RSAVE:
+		ret = kvs_save_write(&global_rbtree, SAVE_RBTREE);
+		if (ret == 0) {
+			length = sprintf(response, "OK\r\n");
+		} else {
+			length = sprintf(response, "ERROR\r\n");
+		}
+		break;
 #endif
 #if ENABLE_HASH
 	case KVS_CMD_HSET:
@@ -217,7 +236,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
-			if(is_reading_log == 0) kvs_log_write(LOG_HASH, "HSET", key, value);
+			if(is_recovering == 0) kvs_log_write(LOG_HASH, "HSET", key, value);
 		} else {
 			length = sprintf(response, "EXIST\r\n");
 		} 
@@ -238,7 +257,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
-			if(is_reading_log == 0) kvs_log_write(LOG_HASH, "HDEL", key, "");
+			if(is_recovering == 0) kvs_log_write(LOG_HASH, "HDEL", key, "");
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -249,7 +268,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(response, "OK\r\n");
-			if(is_reading_log == 0) kvs_log_write(LOG_HASH, "HMOD", key, value);
+			if(is_recovering == 0) kvs_log_write(LOG_HASH, "HMOD", key, value);
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
 		}
@@ -260,6 +279,14 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 			length = sprintf(response, "EXIST\r\n");
 		} else {
 			length = sprintf(response, "NO EXIST\r\n");
+		}
+		break;
+	case KVS_CMD_HSAVE:
+		ret = kvs_save_write(&global_hash, SAVE_HASH);
+		if (ret == 0) {
+			length = sprintf(response, "OK\r\n");
+		} else {
+			length = sprintf(response, "ERROR\r\n");
 		}
 		break;
 #endif
@@ -342,7 +369,10 @@ int main(int argc, char *argv[]) {
 
 	init_kvengine();
 	
+	kvs_save_init(kvs_protocol);
 	kvs_log_init(kvs_protocol);
+
+	is_recovering = 0;
 
 #if (NETWORK_SELECT == NETWORK_REACTOR)
 	reactor_start(port, kvs_protocol);  //
