@@ -46,6 +46,6 @@ $(TESTCASE1.3): $(TESTCASE1.3_SRCS)
 	$(CC) $(FLAGS) -c $^ -o $@
 
 clean: 
-	rm -rf $(OBJS) $(TARGET) $(TESTCASE) $(TESTCASE1.1) $(TESTCASE1.2)
+	rm -rf $(OBJS) $(TARGET) $(TESTCASE) $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3)
 
 

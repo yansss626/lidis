@@ -6,10 +6,41 @@
 
 #include <arpa/inet.h>
 
-
+#define BUFFER_SIZE 1024
 typedef int (*msg_handler)(char *msg, int length, char *response);
 static msg_handler kvs_handler;
 
+char * kvs_client_server_protocol(int fd){
+	char * buf = (char *)malloc(BUFFER_SIZE);
+	if(buf == NULL) return NULL;
+	memset(buf, 0, BUFFER_SIZE);
+	int ret = recv(fd, buf, BUFFER_SIZE, 0);
+	int data_length = 0;
+	int protocol_length = 0;
+	for(int i = 0; i < ret; i++){
+		if(buf[i] == "\n"){
+			char * temp = (char *)malloc(i + 1);
+			if(temp == NULL) return NULL;
+			memset(temp, 0, i + 1);
+			strncpy(temp, buf, i);
+			data_length = atoi(temp);
+			free(temp);
+			protocol_length = i + 1;
+			break;
+		}
+	}
+
+	if(data_length + protocol_length > BUFFER_SIZE){
+		char * new_buf = (char *)malloc(data_length + 1);
+		if(new_buf == NULL) return NULL;
+		strcpy(new_buf, buf + protocol_length);
+		recv(fd, new_buf + ret - protocol_length, data_length - ret + protocol_length, 0);
+		return new_buf;
+	}
+
+	return buf;
+
+}
 
 void server_reader(void *arg) {
 	int fd = *(int *)arg;
@@ -18,12 +49,13 @@ void server_reader(void *arg) {
  
 	while (1) {
 		
-		char buf[1024] = {0};
-		ret = recv(fd, buf, 1024, 0);
+		// char buf[1024] = {0};
+		// ret = recv(fd, buf, 1024, 0);
+		char * buf = kvs_client_server_protocol(fd);
 		if (ret > 0) {
 			
-			char response[1024] = {0};
-			int slength = kvs_handler(buf, ret, response);
+			char response[BUFFER_SIZE] = {0};
+			int slength = kvs_handler(buf, strlen(buf), response);
 
 			ret = send(fd, response, slength, 0);
 			if (ret == -1) {
