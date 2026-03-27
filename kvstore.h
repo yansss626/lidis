@@ -22,9 +22,9 @@
 
 #define KVS_MAX_TOKENS		128
 
-#define ENABLE_ARRAY		0
+#define ENABLE_ARRAY		1
 #define ENABLE_RBTREE		0
-#define ENABLE_HASH			1
+#define ENABLE_HASH			0
 
 #define ENABLE_MODULE_LOG	0
 #define ENABLE_MODULE_SAVE	1
@@ -45,7 +45,7 @@ typedef struct kvs_array_item_s {
 	char *value;
 } kvs_array_item_t;
 
-#define KVS_ARRAY_SIZE		1024
+#define KVS_ARRAY_SIZE		10240
 
 typedef struct kvs_array_s {
 	kvs_array_item_t *table;
