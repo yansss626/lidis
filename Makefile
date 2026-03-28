@@ -1,25 +1,25 @@
 
 CC = gcc
 FLAGS = -I ./NtyCo/core/ -I ./ -L ./NtyCo/ -lntyco -lpthread -luring -ldl
-SRCS = kvstore.c ./server/ntyco.c ./server/proactor.c ./engine/kvs_array.c ./engine/kvs_rbtree.c ./engine/kvs_hash.c ./server/reactor.c ./modules/kvs_log.c ./modules/kvs_save.c
-TESTCASE_SRCS = testcase.c
+SRCS = kvstore.c ./kvs-server/ntyco.c ./kvs-server/proactor.c ./kvs-engine/kvs_array.c ./kvs-engine/kvs_rbtree.c ./kvs-engine/kvs_hash.c ./kvs-server/reactor.c ./kvs-module/kvs_log.c ./kvs-module/kvs_save.c
+
 TARGET = kvstore
 SUBDIR = ./NtyCo/
-TESTCASE = testcase
+
 
 TESTCASE1.1 = set
-TESTCASE1.1_SRCS = ./module_testcase/set.c
+TESTCASE1.1_SRCS = ./testcase/set.c
 
 TESTCASE1.2 = get
-TESTCASE1.2_SRCS = ./module_testcase/get.c
+TESTCASE1.2_SRCS = ./testcase/get.c
 
 TESTCASE1.3 = set_save
-TESTCASE1.3_SRCS = ./module_testcase/set_save.c
+TESTCASE1.3_SRCS = ./testcase/set_save.c
 
 OBJS = $(SRCS:.c=.o)
 
 
-all: $(SUBDIR) $(TARGET) $(TESTCASE) $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3)
+all: $(SUBDIR) $(TARGET) $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3)
 
 $(SUBDIR): ECHO
 	make -C $@
@@ -29,9 +29,6 @@ ECHO:
 
 $(TARGET): $(OBJS) 
 	$(CC) -o $@ $^ $(FLAGS)
-
-$(TESTCASE): $(TESTCASE_SRCS)
-	$(CC) -o $@ $^
 
 $(TESTCASE1.1): $(TESTCASE1.1_SRCS)
 	$(CC) -o $@ $^
