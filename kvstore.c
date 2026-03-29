@@ -66,32 +66,76 @@ const char *response[] = {
 };
 
 
+// int kvs_split_token(char *msg, char *tokens[]) {
+
+// 	if (msg == NULL || tokens == NULL) return -1;
+
+// 	int idx = 0;
+// 	char *token = strtok(msg, " ");
+	
+// 	while (token != NULL) {
+// 		//printf("idx: %d, %s\n", idx, token);
+		
+// 		tokens[idx ++] = token;
+// 		token = strtok(NULL, " ");
+// 	}
+
+// 	return idx;
+// }
+
+
 int kvs_split_token(char *msg, char *tokens[]) {
 
 	if (msg == NULL || tokens == NULL) return -1;
 
 	int idx = 0;
-	char *token = strtok(msg, " ");
+	int pos = 0;
+
+	tokens[idx++] = msg + pos;
+// ********* 获取第一个token***********
+	while(msg[pos] != ' ' && msg[pos] != '\0') pos++;
+	if(msg[pos] == '\0') return 0;
 	
-	while (token != NULL) {
-		//printf("idx: %d, %s\n", idx, token);
-		
-		tokens[idx ++] = token;
-		token = strtok(NULL, " ");
+	msg[pos++] = '\0';
+// ***********************************
+
+
+	while(msg[pos] == ' ')pos++;
+	if(msg[pos] == '\0') return 0;
+
+// ********* 获取第二个token***********
+	tokens[idx++] = msg + pos;
+
+	while(msg[pos] != ' ' && msg[pos] != '\0') pos++;
+    if(msg[pos] == '\0')  {
+		// for(int i = 0; i < idx; i++){
+		// 	printf("%s\n", tokens[i]);
+		// }		
+		return idx;
 	}
+    msg[pos++] = '\0';
+// ***********************************
+
+// ********* 获取第三个token***********
+	while(msg[pos] == ' ') pos++;
+	tokens[idx++] = msg + pos;
+// ***********************************
+
+	// for(int i = 0; i < idx; i++){
+	// 	printf("%s\n", tokens[i]);
+	// }
 
 	return idx;
 }
-
 
 // SET Key Value
 // tokens[0] : SET
 // tokens[1] : Key
 // tokens[2] : Value
 
-int kvs_filter_protocol(char **tokens, int count, char *response) {
+int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 
-	if (tokens[0] == NULL || count == 0 || response == NULL) return -1;
+	if (tokens[0] == NULL || count == 0 || cli == NULL) return -1;
 
 	int cmd = KVS_CMD_START;
 	for (cmd = KVS_CMD_START;cmd < KVS_CMD_COUNT;cmd ++) {
@@ -104,7 +148,7 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 	int ret = 0;
 	char *key = tokens[1];
 	char *value = tokens[2];
-
+	char * response = cli->wbuf;
 	switch(cmd) {
 #if ENABLE_ARRAY
 	case KVS_CMD_SET:
@@ -124,7 +168,13 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
 		if (result == NULL) {
 			length = sprintf(response, "NO EXIST\r\n");
 		} else {
-			length = sprintf(response, "%s\r\n", result);
+			int len = strlen(result);
+			if(len >= cli->w_cap - 2){
+				cli->wbuf = (char *)realloc(cli->wbuf, len + 3);
+				if(cli->wbuf == NULL) return -1;
+				cli->w_cap = len + 2;
+			}
+			length = sprintf(cli->wbuf, "%s\r\n", result);
 		}
 		break;
 	}
@@ -306,23 +356,23 @@ int kvs_filter_protocol(char **tokens, int count, char *response) {
  * @return : length of response
  */
 
-int kvs_protocol(char *msg, int length, char *response) {  //
+int kvs_protocol(client_info * cli) {  //
 	
 // SET Key Value
 // GET Key
 // DEL Key
-	if (msg == NULL || length <= 0 || response == NULL) return -1;
+	if (cli == NULL) return -1;
 
 	//printf("recv %d : %s\n", length, msg);
 
 	char *tokens[KVS_MAX_TOKENS] = {0};
 
-	int count = kvs_split_token(msg, tokens);
+	int count = kvs_split_token(cli->rbuf, tokens);
 	if (count == -1) return -1;
 
 	//memcpy(response, msg, length);
 
-	return kvs_filter_protocol(tokens, count, response);
+	return kvs_filter_protocol(tokens, count, cli);
 }
 
 

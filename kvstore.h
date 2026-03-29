@@ -27,12 +27,27 @@
 #define ENABLE_HASH			0
 
 #define ENABLE_MODULE_LOG	0
-#define ENABLE_MODULE_SAVE	1
+#define ENABLE_MODULE_SAVE	0
 
-typedef int (*msg_handler)(char *msg, int length, char *response);
+typedef struct client_info_s{
+	int fd;
+	char * rbuf;
+	int r_cap;
+	int r_pos;
+
+	char * wbuf;
+	int w_cap;
+	int w_pos;
+
+}client_info;
+
+typedef int (*msg_handler)(client_info * cli);
 
 
-extern int reactor_start(unsigned short port, msg_handler handler);
+int reactor_start(unsigned short port, msg_handler handler);
+
+
+
 extern int proactor_start(unsigned short port, msg_handler handler);
 extern int ntyco_start(unsigned short port, msg_handler handler);
 

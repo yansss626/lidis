@@ -3,45 +3,67 @@
 
 
 #include "nty_coroutine.h"
-
+#include "kvstore.h"
 #include <arpa/inet.h>
 
-#define BUFFER_SIZE 4096
-typedef int (*msg_handler)(char *msg, int length, char *response);
+#define BUFFER_SIZE 12
+
 static msg_handler kvs_handler;
 
-typedef struct client_info_s{
-	int fd;
-	char * rbuf;
-	int capacity;
-	int read_pos;
 
-}client_info;
 
-int kvs_recv_protocol(client_info * cli_info, int * head_length){
+int kvs_recv_protocol(client_info * cli_info, int * head_len){
 	if(cli_info == NULL) return -1;
-	int data_length = 0;
-	int protocol_length = 0;
-
-	while(protocol_length < cli_info->read_pos){
-		if(cli_info->rbuf[protocol_length] == '\r'){
-			cli_info->rbuf[protocol_length] = '\0';
-			data_length = atoi(cli_info->rbuf);
-			cli_info->rbuf[protocol_length] = '\r';
+	int data_len = 0;
+	int protocol_len = 0;
+	while(protocol_len < cli_info->r_pos){
+		if(cli_info->rbuf[protocol_len] == '*'){
+			cli_info->rbuf[protocol_len] = '\0';
+			data_len = atoi(cli_info->rbuf);
+			cli_info->rbuf[protocol_len] = '*';
 			break;
 		}
-		protocol_length++;
+		protocol_len++;
 	}
-	if(protocol_length == cli_info->read_pos) return 0;
-	(*head_length) = protocol_length + 1;
-	int total_length = protocol_length + data_length + 1;
-	if(total_length > cli_info->capacity){
-		cli_info->rbuf = (char *)realloc(cli_info->rbuf, total_length + 1);
-		cli_info->capacity = total_length;
+	if(protocol_len == cli_info->r_pos) return 0;
+	(*head_len) = protocol_len + 1;
+	int total_len = protocol_len + data_len + 1;
+	if(total_len >= cli_info->r_cap){
+		cli_info->rbuf = (char *)realloc(cli_info->rbuf, total_len + 1);
+		cli_info->r_cap = total_len;
 	}
 
-	return total_length;
+	return total_len;
 
+}
+
+client_info * client_info_init(int fd){
+	client_info * cli_info = (client_info *)malloc(sizeof(client_info));
+	if(cli_info == NULL) return NULL;
+	memset(cli_info, 0, sizeof(client_info));
+
+	cli_info->rbuf = (char *)malloc(BUFFER_SIZE + 1);
+	if(cli_info->rbuf == NULL){
+		free(cli_info);
+		return NULL;
+	}
+	cli_info->r_cap = BUFFER_SIZE;
+	memset(cli_info->rbuf, 0, BUFFER_SIZE + 1);
+
+
+	cli_info->wbuf = (char *)malloc(BUFFER_SIZE + 1);
+	if(cli_info->wbuf == NULL){
+		free(cli_info);
+		free(cli_info->rbuf);
+		return NULL;
+	}
+	cli_info->w_cap = BUFFER_SIZE;
+	memset(cli_info->wbuf, 0, BUFFER_SIZE + 1);
+	cli_info->fd = fd;
+
+
+	return cli_info;
+	
 }
 
 // void server_reader(void *arg) {
@@ -57,9 +79,9 @@ int kvs_recv_protocol(client_info * cli_info, int * head_length){
 // 		if (ret > 0) {
 			
 // 			char response[BUFFER_SIZE] = {0};
-// 			int slength = kvs_handler(buf, strlen(buf), response);
+// 			int slen = kvs_handler(buf, strlen(buf), response);
 
-// 			ret = send(fd, response, slength, 0);
+// 			ret = send(fd, response, slen, 0);
 // 			if (ret == -1) {
 // 				close(fd);
 // 				break;
@@ -74,33 +96,44 @@ int kvs_recv_protocol(client_info * cli_info, int * head_length){
 
 
 void server_reader(void *arg) {
-
 		client_info * cli_info = (client_info *)arg;
 		int ret = 0;
-		while(1){	
-			ret = recv(cli_info->fd, cli_info->rbuf + cli_info->read_pos, cli_info->capacity - cli_info->read_pos, 0);
+		while(1){
+			ret = recv(cli_info->fd, cli_info->rbuf + cli_info->r_pos, cli_info->r_cap - cli_info->r_pos, 0);
+			
 			if(ret > 0) {
-				cli_info->read_pos += ret;
-				int head_length = 0;
-				int total_length = kvs_recv_protocol(cli_info, &head_length);
-				if(head_length == 0 || cli_info->read_pos < total_length) continue;
-				cli_info->rbuf[total_length] = '\0';
-				char response[BUFFER_SIZE] = {0};
-				char * pure_data = cli_info->rbuf + head_length;
-				int pure_len = total_length - head_length;
-				int slength = kvs_handler(pure_data, pure_len, response);
-				ret = send(cli_info->fd, response, slength, 0);	
-				cli_info->read_pos = 0;
+				cli_info->r_pos += ret;
+				int head_len = 0;
+				int total_len = kvs_recv_protocol(cli_info, &head_len);
+				if(head_len == 0 || cli_info->r_pos < total_len) continue;
+
+				
+				//char response[BUFFER_SIZE] = {0};
+
+				char * pure_data = cli_info->rbuf + head_len;
+				int pure_len = total_len - head_len;
+				memmove(cli_info->rbuf, cli_info->rbuf + head_len, total_len - head_len);
+				cli_info->rbuf[total_len - head_len] = '\0';
+
+				//printf("%s\n",cli_info->rbuf);
+				int slen = kvs_handler(cli_info);
+				
+				if(slen < 0) break;
+				//ret = send(cli_info->fd, response, slen, 0);	
+				ret = send(cli_info->fd, cli_info->wbuf, slen, 0);	
+				cli_info->r_pos = 0;
 			}
 			else if (ret <= 0) {	
-				close(cli_info->fd);
-				free(cli_info->rbuf);
-				free(cli_info);
-				cli_info = NULL;
+
 				break;
 			}
 			
 		}
+		close(cli_info->fd);
+		if(cli_info->rbuf != NULL) free(cli_info->rbuf);
+		if(cli_info->wbuf != NULL) free(cli_info->wbuf);
+		free(cli_info);
+		cli_info = NULL;
 
 }
 
@@ -125,20 +158,13 @@ void server(void *arg) {
 		socklen_t len = sizeof(struct sockaddr_in);
 		int cli_fd = accept(fd, (struct sockaddr*)&remote, &len);
 
-		client_info * cli_info = (client_info *)malloc(sizeof(client_info));
-		if(cli_info == NULL) return;
-		memset(cli_info, 0, sizeof(client_info));
-		cli_info->rbuf = (char *)malloc(BUFFER_SIZE + 1);
-		if(cli_info->rbuf == NULL){
-			free(cli_info);
-			return ;
-		}
-		cli_info->capacity = BUFFER_SIZE;
-		cli_info->fd = cli_fd;
+		client_info * cli_info = client_info_init(cli_fd);
+		if(cli_info == NULL) break; 
+
 
 		nty_coroutine *read_co;
 		//nty_coroutine_create(&read_co, server_reader, &cli_fd);
-		nty_coroutine_create(&read_co, server_reader, &cli_info);
+		nty_coroutine_create(&read_co, server_reader, cli_info);
 
 	}
 	
