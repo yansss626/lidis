@@ -94,7 +94,7 @@ int kvs_split_token(char *msg, char *tokens[]) {
 	tokens[idx++] = msg + pos;
 // ********* 获取第一个token***********
 	while(msg[pos] != ' ' && msg[pos] != '\0') pos++;
-	if(msg[pos] == '\0') return 0;
+	if(msg[pos] == '\0') return idx;
 	
 	msg[pos++] = '\0';
 // ***********************************
@@ -136,7 +136,6 @@ int kvs_split_token(char *msg, char *tokens[]) {
 int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 
 	if (tokens[0] == NULL || count == 0 || cli == NULL) return -1;
-
 	int cmd = KVS_CMD_START;
 	for (cmd = KVS_CMD_START;cmd < KVS_CMD_COUNT;cmd ++) {
 		if (strcmp(tokens[0], command[cmd]) == 0) {
@@ -169,9 +168,13 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(response, "NO EXIST\r\n");
 		} else {
 			int len = strlen(result);
-			if(len >= cli->w_cap - 2){
-				cli->wbuf = (char *)realloc(cli->wbuf, len + 3);
-				if(cli->wbuf == NULL) return -1;
+			if(len > cli->w_cap - 2){
+				char * temp = (char *)realloc(cli->wbuf, len + 3);
+				if(temp == NULL) {
+					perror("realloc error");
+					return -1;
+				}
+				cli->wbuf = temp;
 				cli->w_cap = len + 2;
 			}
 			length = sprintf(cli->wbuf, "%s\r\n", result);
@@ -236,7 +239,17 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		if (result == NULL) {
 			length = sprintf(response, "NO EXIST\r\n");
 		} else {
-			length = sprintf(response, "%s\r\n", result);
+			int len = strlen(result);
+			if(len > cli->w_cap - 2){
+				char * temp = (char *)realloc(cli->wbuf, len + 3);
+				if(temp == NULL) {
+					perror("realloc error");
+					return -1;
+				}
+				cli->wbuf = temp;
+				cli->w_cap = len + 2;
+			}
+			length = sprintf(cli->wbuf, "%s\r\n", result);
 		}
 		break;
 	}
@@ -297,7 +310,17 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		if (result == NULL) {
 			length = sprintf(response, "NO EXIST\r\n");
 		} else {
-			length = sprintf(response, "%s\r\n", result);
+			int len = strlen(result);
+			if(len > cli->w_cap - 2){
+				char * temp = (char *)realloc(cli->wbuf, len + 3);
+				if(temp == NULL) {
+					perror("realloc error");
+					return -1;
+				}
+				cli->wbuf = temp;
+				cli->w_cap = len + 2;
+			}
+			length = sprintf(cli->wbuf, "%s\r\n", result);
 		}
 		break;
 	}
@@ -364,7 +387,7 @@ int kvs_protocol(client_info * cli) {  //
 	if (cli == NULL) return -1;
 
 	//printf("recv %d : %s\n", length, msg);
-
+	//printf("%s\n", cli->rbuf);
 	char *tokens[KVS_MAX_TOKENS] = {0};
 
 	int count = kvs_split_token(cli->rbuf, tokens);

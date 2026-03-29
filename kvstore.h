@@ -22,12 +22,12 @@
 
 #define KVS_MAX_TOKENS		128
 
-#define ENABLE_ARRAY		1
-#define ENABLE_RBTREE		0
+#define ENABLE_ARRAY		0
+#define ENABLE_RBTREE		1
 #define ENABLE_HASH			0
 
 #define ENABLE_MODULE_LOG	0
-#define ENABLE_MODULE_SAVE	0
+#define ENABLE_MODULE_SAVE	1
 
 typedef struct client_info_s{
 	int fd;

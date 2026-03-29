@@ -37,7 +37,10 @@ void testcase(int connfd, char *msg, char *pattern, char *casename) {
 
 	if (!msg || !pattern || !casename) return ;
 
-	send_msg(connfd, msg, strlen(msg));
+	char new_msg[MAX_MSG_LENGTH] = {0};
+	int total_length = snprintf(new_msg, MAX_MSG_LENGTH, "%ld*%s", strlen(msg), msg);
+	//send_msg(connfd, msg, strlen(msg));
+	send_msg(connfd, new_msg, total_length);
 
 	char result[MAX_MSG_LENGTH] = {0};
 	recv_msg(connfd, result, MAX_MSG_LENGTH);

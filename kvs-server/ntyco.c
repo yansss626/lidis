@@ -29,7 +29,11 @@ int kvs_recv_protocol(client_info * cli_info, int * head_len){
 	(*head_len) = protocol_len + 1;
 	int total_len = protocol_len + data_len + 1;
 	if(total_len >= cli_info->r_cap){
-		cli_info->rbuf = (char *)realloc(cli_info->rbuf, total_len + 1);
+		char * temp = (char *)realloc(cli_info->rbuf, total_len + 1);
+		if(temp == NULL){
+			assert(0);
+		}
+		cli_info->rbuf = temp;
 		cli_info->r_cap = total_len;
 	}
 
