@@ -6,7 +6,7 @@
 #include "kvstore.h"
 #include <arpa/inet.h>
 
-#define BUFFER_SIZE 12
+#define BUFFER_SIZE 64
 
 static msg_handler kvs_handler;
 
@@ -26,7 +26,7 @@ int kvs_recv_protocol(client_info * cli_info, int * head_len){
 		protocol_len++;
 	}
 	if(protocol_len == cli_info->r_pos) return 0;
-	(*head_len) = protocol_len + 1;
+	(*head_len) = protocol_len + 1; // + 1 for length delim: '*' 
 	int total_len = protocol_len + data_len + 1;
 	if(total_len >= cli_info->r_cap){
 		char * temp = (char *)realloc(cli_info->rbuf, total_len + 1);
@@ -104,33 +104,46 @@ void server_reader(void *arg) {
 		int ret = 0;
 		while(1){
 			ret = recv(cli_info->fd, cli_info->rbuf + cli_info->r_pos, cli_info->r_cap - cli_info->r_pos, 0);
-			
-			if(ret > 0) {
-				cli_info->r_pos += ret;
-				int head_len = 0;
-				int total_len = kvs_recv_protocol(cli_info, &head_len);
-				if(head_len == 0 || cli_info->r_pos < total_len) continue;
 
-				
-				//char response[BUFFER_SIZE] = {0};
-
-				char * pure_data = cli_info->rbuf + head_len;
-				int pure_len = total_len - head_len;
-				memmove(cli_info->rbuf, cli_info->rbuf + head_len, total_len - head_len);
-				cli_info->rbuf[total_len - head_len] = '\0';
-
-				//printf("%s\n",cli_info->rbuf);
-				int slen = kvs_handler(cli_info);
-				
-				if(slen < 0) break;
-				//ret = send(cli_info->fd, response, slen, 0);	
-				ret = send(cli_info->fd, cli_info->wbuf, slen, 0);	
-				cli_info->r_pos = 0;
-			}
-			else if (ret <= 0) {	
-
+			if (ret <= 0) {	
 				break;
 			}
+			else {
+				cli_info->r_pos += ret;
+			}
+
+			while(cli_info->r_pos > 0) {
+				
+				int head_len = 0;
+				int total_len = kvs_recv_protocol(cli_info, &head_len);
+				if(head_len == 0 || cli_info->r_pos < total_len) break;  // TCP Segmentation occur, continue to
+				
+				char * pure_data = cli_info->rbuf + head_len;
+				int pure_len = total_len - head_len;
+				memmove(cli_info->rbuf, cli_info->rbuf + head_len, cli_info->r_pos);
+				char temp = cli_info->rbuf[total_len - head_len];
+				cli_info->rbuf[total_len - head_len] = '\0';
+
+				
+				//printf("%s\n", cli_info->rbuf);
+				
+				int slen = kvs_handler(cli_info);
+				cli_info->w_pos += slen;
+				cli_info->rbuf[total_len - head_len] = temp;
+				if(slen < 0) assert(0);
+				cli_info->r_pos -= total_len;
+				if(cli_info->r_pos > 0){
+					memmove(cli_info->rbuf, cli_info->rbuf + pure_len, cli_info->r_pos);
+					
+				}
+				
+				else if(cli_info->r_pos == 0){
+					ret = send(cli_info->fd, cli_info->wbuf, cli_info->w_pos, 0);
+					cli_info->w_pos = 0;
+				}
+				
+			}
+
 			
 		}
 		close(cli_info->fd);

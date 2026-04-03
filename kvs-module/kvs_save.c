@@ -102,7 +102,7 @@ int kvs_save_write(void * arg, KVS_SAVE_TYPE cmd_type){
             if (inst->table[i].key != NULL) {
                 int payload_length = strlen(inst->table[i].key) + strlen(inst->table[i].value) + 2;
                 //fprintf(fp, "SET %s %s\r\n", inst->table[i].key, inst->table[i].value);      
-                fprintf(fp, "%d*SET %s %s\r\n", payload_length, node->key, (char *)node->value);
+                fprintf(fp, "%d*SET %s %s\r\n", payload_length, inst->table[i].key, inst->table[i].value);
             }
         }
         fflush(fp);
