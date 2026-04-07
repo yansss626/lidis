@@ -1,7 +1,8 @@
 
 #include <stdio.h>
 #include "kvstore.h"
-
+#include <string.h>
+#include <stdlib.h>
 #if ENABLE_MODULE_SAVE
 
 #define BUFFER_SIZE 1024
@@ -47,7 +48,7 @@ void kvs_save_write_rbtree(rbtree *T, rbtree_node *node, FILE * fp) {
     if(T == NULL || fp == NULL) return;
     int payload_length = 0;
 	if (node != T->nil) {
-        payload_length = strlen(node->key) + strlen((char *)node->value) + 2;
+        payload_length = strlen(node->key) + strlen((char *)node->value) + 2 + strlen("RSET");
         //fprintf(fp, "RSET %s %s\r\n", node->key, (char *)node->value);
         fprintf(fp, "%d*RSET %s %s\r\n", payload_length, node->key, (char *)node->value);
 		kvs_save_write_rbtree(T, node->left, fp);
@@ -81,7 +82,7 @@ int kvs_save_write(void * arg, KVS_SAVE_TYPE cmd_type){
         for (int i = 0;i < inst->max_slots;i ++) {
             hashnode_t *node = inst->nodes[i];
             while (node != NULL) { 
-                int payload_length = strlen(node->key) + strlen(node->value) + 2;
+                int payload_length = strlen(node->key) + strlen(node->value) + 2 + strlen("HSET");
                 //fprintf(fp, "HSET %s %s\r\n", node->key, node->value);
                 fprintf(fp, "%d*HSET %s %s\r\n", payload_length, node->key, (char *)node->value);
                 node = node->next;
@@ -98,9 +99,9 @@ int kvs_save_write(void * arg, KVS_SAVE_TYPE cmd_type){
         kvs_array_t * inst = (kvs_array_t *)arg;
         fp = fopen("./kvs-module/kvs_array.txt", "w");
         if(fp == NULL) return -2;
-        for (int i = 0;i < inst->total;i ++) {
+        for (int i = 0;i < KVS_ARRAY_SIZE;i ++) {
             if (inst->table[i].key != NULL) {
-                int payload_length = strlen(inst->table[i].key) + strlen(inst->table[i].value) + 2;
+                int payload_length = strlen(inst->table[i].key) + strlen(inst->table[i].value) + 2 + strlen("SET");
                 //fprintf(fp, "SET %s %s\r\n", inst->table[i].key, inst->table[i].value);      
                 fprintf(fp, "%d*SET %s %s\r\n", payload_length, inst->table[i].key, inst->table[i].value);
             }

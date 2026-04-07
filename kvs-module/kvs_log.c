@@ -1,6 +1,8 @@
 
 #include "kvstore.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #if ENABLE_MODULE_LOG
 #define BUFFER_SIZE 1024
