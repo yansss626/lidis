@@ -1,9 +1,8 @@
-
-
-
-
 #include "kvstore.h"
-
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <stdio.h>
 
 #if ENABLE_ARRAY
 extern kvs_array_t global_array;
@@ -15,6 +14,10 @@ extern kvs_rbtree_t global_rbtree;
 
 #if ENABLE_HASH
 extern kvs_hash_t global_hash;
+#endif
+
+#if ENABLE_MODULE_SYNC
+extern kvs_slaves global_slaves;
 #endif
 
 void *kvs_malloc(size_t size) {
@@ -29,7 +32,8 @@ void kvs_free(void *ptr) {
 const char *command[] = {
 	"SET", "GET", "DEL", "MOD", "EXIST", "SAVE",
 	"RSET", "RGET", "RDEL", "RMOD", "REXIST", "RSAVE",
-	"HSET", "HGET", "HDEL", "HMOD", "HEXIST", "HSAVE"
+	"HSET", "HGET", "HDEL", "HMOD", "HEXIST", "HSAVE",
+	"SYNC"
 };
 
 enum {
@@ -56,6 +60,8 @@ enum {
 	KVS_CMD_HEXIST,
 	KVS_CMD_HSAVE,
 	
+	KVS_CMD_SYNC,
+
 	KVS_CMD_COUNT,
 };
 
@@ -142,12 +148,12 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			break;
 		} 
 	}
-
+	//printf("tokens[0]: %s\n", tokens[0]);
 	int length = 0;
 	int ret = 0;
 	char *key = tokens[1];
 	char *value = tokens[2];
-
+	int is_write_success = 0;
 	if(cli->w_cap - cli->w_pos < 16){
 			char * temp = (char *)realloc(cli->wbuf, cli->w_cap * 2);
 			if(temp == NULL) {
@@ -166,6 +172,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 			if(is_recovering == 0) kvs_log_write(LOG_ARRAY, "SET", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
@@ -197,6 +204,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 			if(is_recovering == 0) kvs_log_write(LOG_ARRAY, "DEL", key, "");
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
@@ -208,6 +216,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 			if(is_recovering == 0) kvs_log_write(LOG_ARRAY, "MOD", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
@@ -225,6 +234,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		ret = kvs_save_write(&global_array, SAVE_ARRAY);
 		if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
 		}
@@ -238,6 +248,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 			if(is_recovering == 0) kvs_log_write(LOG_RBTREE, "RSET", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
@@ -269,6 +280,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 			if(is_recovering == 0) kvs_log_write(LOG_RBTREE, "RDEL", key, "");
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
@@ -280,6 +292,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 			if(is_recovering == 0) kvs_log_write(LOG_RBTREE, "RMOD", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
@@ -297,6 +310,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		ret = kvs_save_write(&global_rbtree, SAVE_RBTREE);
 		if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
 		}
@@ -309,6 +323,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 			if(is_recovering == 0) kvs_log_write(LOG_HASH, "HSET", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
@@ -340,6 +355,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 			if(is_recovering == 0) kvs_log_write(LOG_HASH, "HDEL", key, "");
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
@@ -351,6 +367,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 			if(is_recovering == 0) kvs_log_write(LOG_HASH, "HMOD", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
@@ -368,16 +385,21 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		ret = kvs_save_write(&global_hash, SAVE_HASH);
 		if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
 		}
+		break;
+	case KVS_CMD_SYNC:
+		kvs_full_sync(&global_slaves, cli);
+		length = 0;
 		break;
 #endif
 
 	default: 
 		assert(0);
 	}
-
+	if(is_write_success == 1) kvs_incr_sync(&global_slaves, cli, count, tokens);
 	return length;
 }
 
@@ -400,7 +422,7 @@ int kvs_protocol(client_info * cli) {  //
 	//printf("%s\n", cli->rbuf);
 	char *tokens[KVS_MAX_TOKENS] = {0};
 
-	int count = kvs_split_token(cli->rbuf, tokens);
+	int count = kvs_split_token(cli->rbuf + cli->cmd_hl, tokens);
 	if (count == -1) return -1;
 
 	//memcpy(response, msg, length);
@@ -446,7 +468,7 @@ void dest_kvengine(void) {
 
 int main(int argc, char *argv[]) {
 
-	if (argc != 2) return -1;
+	if (argc < 2) return -1;
 
 	int port = atoi(argv[1]);
 
@@ -457,11 +479,21 @@ int main(int argc, char *argv[]) {
 
 	is_recovering = 0;
 
+#if ENABLE_MODULE_SYNC
+	if(argc == 4){
+		int master_port = atoi(argv[3]);
+		if(0 != kvs_connect_to_master(argv[2], master_port)){
+			printf("failed to sync\n");
+		}
+	}
+#endif
+
+
 #if (NETWORK_SELECT == NETWORK_REACTOR)
 	reactor_start(port, kvs_protocol);  //
-#elif (NETWORK_SELECT == NETWORK_PROACTOR)
-	ntyco_start(port, kvs_protocol);
 #elif (NETWORK_SELECT == NETWORK_NTYCO)
+	ntyco_start(port, kvs_protocol);
+#elif (NETWORK_SELECT == NETWORK_PROACTOR)
 	proactor_start(port, kvs_protocol);
 #endif
 
