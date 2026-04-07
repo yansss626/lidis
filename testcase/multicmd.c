@@ -4,7 +4,7 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 // **************** testcase for send multiple command at once  ****************
-// ***************************************               ******************
+// ***************************************     建议服务端BUFFER SIZE 设置为 1024          ******************
 #define MAX_MSG_LENGTH		4096
 #define TIME_SUB_MS(tv1, tv2)  ((tv1.tv_sec - tv2.tv_sec) * 1000 + (tv1.tv_usec - tv2.tv_usec) / 1000)
 
@@ -118,7 +118,6 @@ void rbtree_testcase_1w(int connfd) {
 
 	}
     // printf("strlen: %ld\n", strlen(cmd));
-    // printf("%s\n", cmd);
 
     testcase(connfd, cmd);
 
