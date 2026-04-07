@@ -147,25 +147,57 @@ void hash_testcase_1w(int connfd) {
 
 }
 
+void testcase_1w(int connfd){
 
+	int count = 10000;
+	int i = 0;
+
+	for (i = 0;i < count;i ++) {
+
+		char cmd[128] = {0};
+		snprintf(cmd, 128, "RSET Teacher%d King%d", i, i);
+		testcase(connfd, cmd, "OK\r\n", cmd);
+	}
+
+	for (i = 0;i < count;i ++) {
+
+		char cmd[128] = {0};
+		snprintf(cmd, 128, "HSET Teacher%d King%d", i, i);
+		testcase(connfd, cmd, "OK\r\n", cmd);
+	}
+
+	for (i = 0;i < count;i ++) {
+
+		char cmd[128] = {0};
+		snprintf(cmd, 128, "SET Teacher%d King%d", i, i);
+		testcase(connfd, cmd, "OK\r\n", cmd);
+	}
+
+}
 
 // testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash 
 int main(int argc, char *argv[]) {
 
-	if (argc != 4) {
+	if (argc < 3) {
 		printf("arg error\n");
 		return -1;
 	}
 
 	char *ip = argv[1];
 	int port = atoi(argv[2]);
-	int mode = atoi(argv[3]);
+	
 
 	int connfd = connect_tcpserver(ip, port);
 
-	if(mode == 0) rbtree_testcase_1w(connfd);
-	else if(mode == 1) array_testcase_1w(connfd);
-	else if (mode == 2) hash_testcase_1w(connfd);
+	if(argc == 4){
+		int mode = atoi(argv[3]);
+		if(mode == 0) rbtree_testcase_1w(connfd);
+		else if(mode == 1) array_testcase_1w(connfd);
+		else if (mode == 2) hash_testcase_1w(connfd);
+	}
+	else if(argc == 3){
+		testcase_1w(connfd);
+	}
 
 
 	return 0;
