@@ -1,7 +1,8 @@
 
 
 #include "kvstore.h"
-
+#include <stdio.h>
+#include <string.h>
 #if ENABLE_ARRAY
 // singleton
 
@@ -60,7 +61,7 @@ int kvs_array_set(kvs_array_t *inst, char *key, char *value) {
 	strncpy(kvalue, value, strlen(value));
 
 	int i = 0;
-	for (i = 0;i < inst->total;i ++) {
+	for (i = 0;i < KVS_ARRAY_SIZE;i ++) {
 		if (inst->table[i].key == NULL) {
 			
 			inst->table[i].key = kcopy;
@@ -71,13 +72,6 @@ int kvs_array_set(kvs_array_t *inst, char *key, char *value) {
 		}
 	}
 
-	if (i == inst->total && i < KVS_ARRAY_SIZE) {
-
-		inst->table[i].key = kcopy;
-		inst->table[i].value = kvalue;
-		inst->total ++;
-	}
-
 	return 0;
 }
 
@@ -86,7 +80,7 @@ char* kvs_array_get(kvs_array_t *inst, char *key) {
 	if (inst == NULL || key == NULL) return NULL;
 
 	int i = 0;
-	for (i = 0;i < inst->total;i ++) {
+	for (i = 0;i < KVS_ARRAY_SIZE;i ++) {
 		if (inst->table[i].key == NULL) {
 			continue;
 		}
@@ -109,7 +103,7 @@ int kvs_array_del(kvs_array_t *inst, char *key) {
 	if (inst == NULL || key == NULL) return -1;
 
 	int i = 0;
-	for (i = 0;i < inst->total;i ++) {
+	for (i = 0;i < KVS_ARRAY_SIZE;i ++) {
 		
 		if (inst->table[i].key == NULL) {
 			continue;
@@ -122,9 +116,9 @@ int kvs_array_del(kvs_array_t *inst, char *key) {
 			kvs_free(inst->table[i].value);
 			inst->table[i].value = NULL;
 // error: > 1024
-			if (inst->total-1 == i) {
-				inst->total --;
-			}
+
+			inst->total --;
+			
 			
 
 			return 0;
@@ -149,7 +143,7 @@ int kvs_array_mod(kvs_array_t *inst, char *key, char *value) {
 	
 
 	int i = 0;
-	for (i = 0;i < inst->total;i ++) {
+	for (i = 0;i < KVS_ARRAY_SIZE;i ++) {
 
 		if (inst->table[i].key == NULL) {
 			continue;

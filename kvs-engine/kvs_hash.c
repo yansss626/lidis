@@ -32,7 +32,7 @@ static int _hash(char *key, int size) {
 		i ++;
 	}
 
-	return sum % size;
+	return abs(sum % size);
 
 }
 
