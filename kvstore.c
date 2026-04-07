@@ -464,6 +464,18 @@ void dest_kvengine(void) {
 
 }
 
+void kvs_init(){
+	init_kvengine();
+	kvs_save_init(kvs_protocol);
+	kvs_log_init(kvs_protocol);
+}
+
+void kvs_deinit(){
+	dest_kvengine();
+	kvs_log_close();
+	kvs_slaves_destroy(&global_slaves);
+}
+
 
 
 int main(int argc, char *argv[]) {
@@ -472,10 +484,7 @@ int main(int argc, char *argv[]) {
 
 	int port = atoi(argv[1]);
 
-	init_kvengine();
-	
-	kvs_save_init(kvs_protocol);
-	kvs_log_init(kvs_protocol);
+	kvs_init();
 
 	is_recovering = 0;
 
@@ -497,9 +506,8 @@ int main(int argc, char *argv[]) {
 	proactor_start(port, kvs_protocol);
 #endif
 
-	dest_kvengine();
 	
-	kvs_log_close();
+	kvs_deinit();
 }
 
 
