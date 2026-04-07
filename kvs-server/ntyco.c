@@ -6,10 +6,12 @@
 #include "kvstore.h"
 #include <arpa/inet.h>
 
-#define BUFFER_SIZE 64
+#define BUFFER_SIZE 1024
 
 static msg_handler kvs_handler;
-
+#if ENABLE_MODULE_SYNC
+extern kvs_slaves global_slaves;
+#endif
 
 
 int kvs_recv_protocol(client_info * cli_info, int * head_len){
@@ -106,6 +108,7 @@ void server_reader(void *arg) {
 			ret = recv(cli_info->fd, cli_info->rbuf + cli_info->r_pos, cli_info->r_cap - cli_info->r_pos, 0);
 
 			if (ret <= 0) {	
+				if(cli_info->role == 1) kvs_slaves_delete(&global_slaves, cli_info->fd);
 				break;
 			}
 			else {
@@ -118,32 +121,42 @@ void server_reader(void *arg) {
 				int total_len = kvs_recv_protocol(cli_info, &head_len);
 				if(head_len == 0 || cli_info->r_pos < total_len) break;  // TCP Segmentation occur, continue to
 				
-				char * pure_data = cli_info->rbuf + head_len;
-				int pure_len = total_len - head_len;
-				memmove(cli_info->rbuf, cli_info->rbuf + head_len, cli_info->r_pos);
-				char temp = cli_info->rbuf[total_len - head_len];
-				cli_info->rbuf[total_len - head_len] = '\0';
+				cli_info->cmd_tl = total_len;
+				cli_info->cmd_hl = head_len;
 
-				
+
+				// memmove(cli_info->rbuf, cli_info->rbuf + head_len, cli_info->r_pos - head_len);
+				// char temp = cli_info->rbuf[total_len - head_len];
+				// cli_info->rbuf[total_len - head_len] = '\0';
+				char temp = cli_info->rbuf[total_len];
+				cli_info->rbuf[total_len] = '\0';
 				//printf("%s\n", cli_info->rbuf);
-				
+
 				int slen = kvs_handler(cli_info);
 				cli_info->w_pos += slen;
-				cli_info->rbuf[total_len - head_len] = temp;
+				//cli_info->rbuf[total_len - head_len] = temp;
+				cli_info->rbuf[total_len] = temp;
 				if(slen < 0) assert(0);
 				cli_info->r_pos -= total_len;
 				if(cli_info->r_pos > 0){
-					memmove(cli_info->rbuf, cli_info->rbuf + pure_len, cli_info->r_pos);
+					int pure_len = total_len - head_len;
+					//memmove(cli_info->rbuf, cli_info->rbuf + pure_len, cli_info->r_pos);
+					memmove(cli_info->rbuf, cli_info->rbuf + total_len, cli_info->r_pos);
 					
 				}
 				
-				else if(cli_info->r_pos == 0){
-					ret = send(cli_info->fd, cli_info->wbuf, cli_info->w_pos, 0);
-					cli_info->w_pos = 0;
-				}
+				// else if(cli_info->r_pos == 0){
+				// 	if(cli_info->role == 1) cli_info->w_pos = 0; // slave doesn't reply
+				// 	ret = send(cli_info->fd, cli_info->wbuf, cli_info->w_pos, 0);
+				// 	cli_info->w_pos = 0;
+				// }
 				
 			}
-
+			if(cli_info->w_pos > 0){
+				if(cli_info->role == 1) cli_info->w_pos = 0; // slave doesn't reply
+				else ret = send(cli_info->fd, cli_info->wbuf, cli_info->w_pos, 0);
+				cli_info->w_pos = 0;
+			}
 			
 		}
 		close(cli_info->fd);

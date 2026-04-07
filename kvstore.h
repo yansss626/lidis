@@ -4,11 +4,6 @@
 #ifndef __KV_STORE_H__
 #define __KV_STORE_H__
 
-
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <assert.h>
 #include <stddef.h>
 
 
@@ -16,7 +11,7 @@
 #define NETWORK_PROACTOR	1
 #define NETWORK_NTYCO		2
 
-#define NETWORK_SELECT		NETWORK_PROACTOR
+#define NETWORK_SELECT		NETWORK_NTYCO
 
 
 
@@ -28,18 +23,26 @@
 
 #define ENABLE_MODULE_LOG	0
 #define ENABLE_MODULE_SAVE	1
+#define ENABLE_MODULE_SYNC	1
 
 typedef struct client_info_s{
 	int fd;
 	char * rbuf;
 	int r_cap;
 	int r_pos;
+	int cmd_tl; // total length includes head_length plus payload_length(data_length) 
+	int cmd_hl; // head_length
 
 	char * wbuf;
 	int w_cap;
 	int w_pos;
 
+	int role; // 0:master 1:slave
 }client_info;
+
+
+#include "kvs_sync.h"
+
 
 typedef int (*msg_handler)(client_info * cli);
 
