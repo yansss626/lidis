@@ -59,12 +59,12 @@ void kvs_save_write_rbtree(rbtree *T, rbtree_node *node, FILE * fp) {
 }
 #endif
 
-int kvs_save_write(void * arg, KVS_SAVE_TYPE cmd_type){
+int kvs_save_write(void * arg, KVS_TYPE cmd_type){
     if(arg == NULL) return -1;
     FILE * fp = NULL;
 
 #if ENABLE_RBTREE    
-    if(cmd_type == SAVE_RBTREE) {
+    if(cmd_type == RBTREE) {
         kvs_rbtree_t * inst = (kvs_rbtree_t *) arg; 
         fp = fopen("./kvs-module/kvs_rbtree.txt", "w");
         if(fp == NULL) return -2;
@@ -75,7 +75,7 @@ int kvs_save_write(void * arg, KVS_SAVE_TYPE cmd_type){
 #endif
 
 #if ENABLE_HASH
-    if(cmd_type == SAVE_HASH){
+    if(cmd_type == HASH){
         kvs_hash_t * inst = (kvs_hash_t *)arg;
         fp = fopen("./kvs-module/kvs_hash.txt", "w");
         if(fp == NULL) return -2;    
@@ -95,7 +95,7 @@ int kvs_save_write(void * arg, KVS_SAVE_TYPE cmd_type){
 #endif
 
 #if ENABLE_ARRAY
-    if(cmd_type == SAVE_ARRAY){
+    if(cmd_type == ARRAY){
         kvs_array_t * inst = (kvs_array_t *)arg;
         fp = fopen("./kvs-module/kvs_array.txt", "w");
         if(fp == NULL) return -2;

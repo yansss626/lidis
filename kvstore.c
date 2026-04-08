@@ -154,6 +154,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	char *key = tokens[1];
 	char *value = tokens[2];
 	int is_write_success = 0;
+	KVS_TYPE type = NONE;
 	if(cli->w_cap - cli->w_pos < 16){
 			char * temp = (char *)realloc(cli->wbuf, cli->w_cap * 2);
 			if(temp == NULL) {
@@ -167,13 +168,13 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	switch(cmd) {
 #if ENABLE_ARRAY
 	case KVS_CMD_SET:
+		type = ARRAY;
 		ret = kvs_array_set(&global_array ,key, value);
 		if (ret < 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
-			if(is_recovering == 0) kvs_log_write(LOG_ARRAY, "SET", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
 		} 
@@ -199,25 +200,25 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		break;
 	}
 	case KVS_CMD_DEL:
+		type = ARRAY;
 		ret = kvs_array_del(&global_array ,key);		
 		if (ret < 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
-			if(is_recovering == 0) kvs_log_write(LOG_ARRAY, "DEL", key, "");
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
 		}
 		break;
 	case KVS_CMD_MOD:
+		type = ARRAY;
 		ret = kvs_array_mod(&global_array ,key, value);
 		if (ret < 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
-			if(is_recovering == 0) kvs_log_write(LOG_ARRAY, "MOD", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
 		}
@@ -231,7 +232,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		}
 		break;
 	case KVS_CMD_SAVE:
-		ret = kvs_save_write(&global_array, SAVE_ARRAY);
+		ret = kvs_save_write(&global_array, ARRAY);
 		if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
@@ -243,13 +244,13 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	// rbtree
 #if ENABLE_RBTREE
 	case KVS_CMD_RSET:
+		type = RBTREE;
 		ret = kvs_rbtree_set(&global_rbtree ,key, value);
 		if (ret < 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
-			if(is_recovering == 0) kvs_log_write(LOG_RBTREE, "RSET", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
 		} 
@@ -275,25 +276,25 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		break;
 	}
 	case KVS_CMD_RDEL:
+		type = RBTREE;
 		ret = kvs_rbtree_del(&global_rbtree ,key);
 		if (ret < 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
-			if(is_recovering == 0) kvs_log_write(LOG_RBTREE, "RDEL", key, "");
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
 		}
 		break;
 	case KVS_CMD_RMOD:
+		type = RBTREE;
 		ret = kvs_rbtree_mod(&global_rbtree ,key, value);
 		if (ret < 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
-			if(is_recovering == 0) kvs_log_write(LOG_RBTREE, "RMOD", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
 		}
@@ -307,7 +308,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		}
 		break;
 	case KVS_CMD_RSAVE:
-		ret = kvs_save_write(&global_rbtree, SAVE_RBTREE);
+		ret = kvs_save_write(&global_rbtree, RBTREE);
 		if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
@@ -318,13 +319,13 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 #endif
 #if ENABLE_HASH
 	case KVS_CMD_HSET:
+		type = HASH;
 		ret = kvs_hash_set(&global_hash ,key, value);
 		if (ret < 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
 		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
-			if(is_recovering == 0) kvs_log_write(LOG_HASH, "HSET", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
 		} 
@@ -350,25 +351,25 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		break;
 	}
 	case KVS_CMD_HDEL:
+		type = HASH;
 		ret = kvs_hash_del(&global_hash ,key);
 		if (ret < 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
-			if(is_recovering == 0) kvs_log_write(LOG_HASH, "HDEL", key, "");
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
 		}
 		break;
 	case KVS_CMD_HMOD:
+		type = HASH;
 		ret = kvs_hash_mod(&global_hash ,key, value);
 		if (ret < 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
  		} else if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
-			if(is_recovering == 0) kvs_log_write(LOG_HASH, "HMOD", key, value);
 		} else {
 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
 		}
@@ -382,7 +383,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		}
 		break;
 	case KVS_CMD_HSAVE:
-		ret = kvs_save_write(&global_hash, SAVE_HASH);
+		ret = kvs_save_write(&global_hash, HASH);
 		if (ret == 0) {
 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
 			is_write_success = 1;
@@ -399,7 +400,18 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	default: 
 		assert(0);
 	}
-	if(is_write_success == 1) kvs_incr_sync(&global_slaves, cli, count, tokens);
+
+	if(is_write_success == 1) {
+		for(int i = 0; i < count - 1; i++){
+			int pos = strlen(tokens[i]);
+			(tokens[i])[pos] = ' ';
+		} // repair cli->rbuf due to kvs_split_token
+		if(is_recovering == 0){
+			kvs_log_write(type, cli);
+		} 
+		kvs_incr_sync(&global_slaves, cli);
+	}
+	
 	return length;
 }
 

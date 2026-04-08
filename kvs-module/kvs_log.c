@@ -127,16 +127,29 @@ int kvs_log_init(msg_handler handler){
 }
 
 
-int kvs_log_write(KVS_LOG_TYPE cmd_type, char * kvs_cmd, char * key, char * value){
-    if (kvs_cmd == NULL || key == NULL || value == NULL) return -1;
+// int kvs_log_write(KVS_LOG_TYPE cmd_type, char * kvs_cmd, char * key, char * value){
+//     if (kvs_cmd == NULL || key == NULL || value == NULL) return -1;
 
+//     FILE * fp = NULL;
+//     if(cmd_type == LOG_ARRAY) fp = fp_array;
+//     else if(cmd_type == LOG_HASH) fp = fp_hash;
+//     else if(cmd_type == LOG_RBTREE) fp = fp_rbtree;
+//     if(fp == NULL) return -2;
+//     int payload_length = strlen(kvs_cmd) + strlen(key) + strlen(value) + 2;
+//     fprintf(fp, "%d*%s %s %s\r\n", payload_length, kvs_cmd, key, value);
+//     //fprintf(fp, "%s %s %s\r\n", kvs_cmd, key, value); // 无协议
+//     fflush(fp);
+//     return 0;
+// }
+
+int kvs_log_write(KVS_TYPE cmd_type, client_info * cli){
+    if (cli == NULL) return -1;
     FILE * fp = NULL;
-    if(cmd_type == LOG_ARRAY) fp = fp_array;
-    else if(cmd_type == LOG_HASH) fp = fp_hash;
-    else if(cmd_type == LOG_RBTREE) fp = fp_rbtree;
+    if(cmd_type == ARRAY) fp = fp_array;
+    else if(cmd_type == HASH) fp = fp_hash;
+    else if(cmd_type == RBTREE) fp = fp_rbtree;
     if(fp == NULL) return -2;
-    int payload_length = strlen(kvs_cmd) + strlen(key) + strlen(value) + 2;
-    fprintf(fp, "%d*%s %s %s\r\n", payload_length, kvs_cmd, key, value);
+    fprintf(fp, "%s\r\n", cli->rbuf);
     //fprintf(fp, "%s %s %s\r\n", kvs_cmd, key, value); // 无协议
     fflush(fp);
     return 0;

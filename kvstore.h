@@ -21,8 +21,8 @@
 #define ENABLE_RBTREE		1
 #define ENABLE_HASH			1
 
-#define ENABLE_MODULE_LOG	0
-#define ENABLE_MODULE_SAVE	1
+#define ENABLE_MODULE_LOG	1
+#define ENABLE_MODULE_SAVE	0
 #define ENABLE_MODULE_SYNC	1
 
 typedef struct client_info_s{
@@ -40,6 +40,12 @@ typedef struct client_info_s{
 	int role; // 0:master 1:slave
 }client_info;
 
+typedef enum{
+	ARRAY,
+	HASH,
+	RBTREE,
+	NONE,
+}KVS_TYPE;
 
 #include "kvs_sync.h"
 
@@ -178,33 +184,27 @@ void kvs_free(void *ptr);
 
 #if ENABLE_MODULE_LOG
 
-	typedef enum{
-		LOG_ARRAY = 0,
-		LOG_HASH,
-		LOG_RBTREE
-	}KVS_LOG_TYPE;
+
 
 	int kvs_log_init(msg_handler handler);
-	int kvs_log_write(KVS_LOG_TYPE cmd_type, char * kvs_cmd, char * key, char * value);
+	//int kvs_log_write(KVS_TYPE cmd_type, char * kvs_cmd, char * key, char * value);
+	int kvs_log_write(KVS_TYPE cmd_type, client_info * cli);
 	int kvs_log_close();
 
 #else
 
 	#define kvs_log_init(handler)	(0)
-	#define kvs_log_write(cmd_type, kvs_cmd, key, value)	(0)
+	//#define kvs_log_write(cmd_type, kvs_cmd, key, value)	(0)
+	#define kvs_log_write(cmd_type, cli)	(0)
 	#define kvs_log_close()	(0)
 #endif
 
 
 #if ENABLE_MODULE_SAVE
 	
-	typedef enum{
-		SAVE_ARRAY,
-		SAVE_HASH,
-		SAVE_RBTREE
-	}KVS_SAVE_TYPE;
+
 	int kvs_save_init(msg_handler handler);
-	int kvs_save_write(void * arg ,KVS_SAVE_TYPE cmd_type);
+	int kvs_save_write(void * arg ,KVS_TYPE cmd_type);
 	int kvs_save_read();
 
 #else
