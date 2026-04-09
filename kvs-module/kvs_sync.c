@@ -13,6 +13,20 @@
 
 kvs_slaves global_slaves = {0};
 
+
+#if ENABLE_ARRAY
+extern kvs_array_t global_array;
+#endif
+
+#if ENABLE_RBTREE
+extern kvs_rbtree_t global_rbtree;
+#endif
+
+#if ENABLE_HASH
+extern kvs_hash_t global_hash;
+#endif
+int kvs_write_snapshot(FILE * fp);
+
 int kvs_connect_to_master(char * ip, unsigned short port){
     if(ip == NULL) return -1;
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -53,21 +67,89 @@ int kvs_full_sync(kvs_slaves * inst, client_info * cli){
     kvs_slaves_insert(inst, cli->fd);
     cli->role = 1;
 
+    FILE * fp = fopen("kvs_snapshot.txt", "w");
+    if(kvs_write_snapshot(fp) > 0){
+        nty_coroutine * write_co = NULL;
+        nty_coroutine_create(&write_co, server_writer, &(cli->fd));
+    }
+    else{
+        printf("NO need to sync\n");
+    }
+    fclose(fp);
     
-
-
-
+    
 
 
     return 0;
 }
 
-int kvs_incr_sync(kvs_slaves * inst, client_info * cli, int count, char ** tokens){
+
+
+
+
+#if ENABLE_RBTREE
+int kvs_write_snapshot_rbtree(rbtree *T, rbtree_node *node, FILE * fp) {
+    if(T == NULL || fp == NULL) return -1;
+    int payload_length = 0;
+	if (node != T->nil) {
+        payload_length = strlen(node->key) + strlen((char *)node->value) + 2 + strlen("RSET");
+        //fprintf(fp, "RSET %s %s\r\n", node->key, (char *)node->value);
+        fprintf(fp, "%d*RSET %s %s\r\n", payload_length, node->key, (char *)node->value);
+		kvs_write_snapshot_rbtree(T, node->left, fp);
+  
+		kvs_write_snapshot_rbtree(T, node->right, fp);
+	}
+    return payload_length;
+}
+#endif
+
+int kvs_write_snapshot(FILE * fp){
+    if(fp == NULL) return -1;
+    int payload_length = 0;
+#if ENABLE_RBTREE    
+    kvs_rbtree_t * R_inst = &global_rbtree; 
+    payload_length = kvs_write_snapshot_rbtree(R_inst, R_inst->root, fp);
+#endif
+    
+#if ENABLE_HASH
+    kvs_hash_t *  H_inst = &global_hash;
+    if(H_inst->count > 0){
+        for (int i = 0;i < H_inst->max_slots;i ++) {
+            hashnode_t *node = H_inst->nodes[i];
+            while (node != NULL) { 
+                payload_length = strlen(node->key) + strlen(node->value) + 2 + strlen("HSET");
+                //fprintf(fp, "HSET %s %s\r\n", node->key, node->value);
+                fprintf(fp, "%d*HSET %s %s\r\n", payload_length, node->key, (char *)node->value);
+                node = node->next;
+                
+            }
+        }
+    }
+   
+#endif
+
+#if ENABLE_ARRAY
+
+    kvs_array_t * inst = &global_array;
+    if(inst->total > 0){
+        for (int i = 0;i < KVS_ARRAY_SIZE;i ++) {
+            if (inst->table[i].key != NULL) {
+                payload_length = strlen(inst->table[i].key) + strlen(inst->table[i].value) + 2 + strlen("SET");
+                //fprintf(fp, "SET %s %s\r\n", inst->table[i].key, inst->table[i].value);      
+                fprintf(fp, "%d*SET %s %s\r\n", payload_length, inst->table[i].key, inst->table[i].value);
+            }
+        }
+    }
+
+       
+#endif
+    return payload_length;
+}
+
+
+int kvs_incr_sync(kvs_slaves * inst, client_info * cli){
     if(inst == NULL || inst->table == NULL || cli == NULL) return -1;
-    for(int i = 0; i < count - 1; i++){
-        int pos = strlen(tokens[i]);
-        (tokens[i])[pos] = ' ';
-    } // repair cli->rbuf due to kvs_split_token
+
 
 
     int synced_num = 0;

@@ -99,7 +99,36 @@ client_info * client_info_init(int fd){
 
 // 	}
 // }
-
+void server_writer(void * arg){
+	int fd = *(int *)arg;
+	FILE * fp = fopen("kvs_snapshot.txt", "r");
+	if(fp == NULL) return;
+	int payload_length = 0;
+	char * buffer = (char *)kvs_malloc(BUFFER_SIZE);
+	int cap = BUFFER_SIZE;
+	if(buffer == NULL) return;
+	memset(buffer, 0, BUFFER_SIZE);
+	while(fscanf(fp, "%d*", &payload_length) > 0){
+		int head_len = sprintf(buffer, "%d*", payload_length);
+		int total_len = payload_length + head_len;
+		if(cap < total_len - 1){
+			char * temp = realloc(buffer, total_len);
+			if(temp == NULL){
+				perror("realloc error");
+				return;
+			}
+			cap = total_len;
+			buffer = temp;
+		}
+		fread(buffer + head_len, 1, payload_length, fp);
+		buffer[total_len] = '\0';
+		int ret = send(fd, buffer, total_len, 0);
+	}
+	
+	kvs_free(buffer);
+	fclose(fp);
+	printf("server_writer finished\n");
+}
 
 void server_reader(void *arg) {
 		client_info * cli_info = (client_info *)arg;

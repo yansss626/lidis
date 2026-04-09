@@ -15,6 +15,7 @@
     }kvs_slaves;
 
     void server_reader(void *arg);
+    void server_writer(void * arg);
     client_info * client_info_init(int fd);
     int kvs_connect_to_master(char * ip, unsigned short port);
 
@@ -23,7 +24,7 @@
     int kvs_slaves_delete(kvs_slaves * inst, int fd);
     int kvs_slaves_destroy(kvs_slaves * inst);
     int kvs_full_sync(kvs_slaves * inst, client_info * cli);
-    int kvs_incr_sync(kvs_slaves * inst, client_info * cli, int count, char ** tokens);
+    int kvs_incr_sync(kvs_slaves * inst, client_info * cli);
 
 #else
     #define kvs_connect_to_master(ip, port) (0)

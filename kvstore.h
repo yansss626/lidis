@@ -21,7 +21,7 @@
 #define ENABLE_RBTREE		1
 #define ENABLE_HASH			1
 
-#define ENABLE_MODULE_LOG	1
+#define ENABLE_MODULE_LOG	0
 #define ENABLE_MODULE_SAVE	0
 #define ENABLE_MODULE_SYNC	1
 
@@ -45,7 +45,7 @@ typedef enum{
 	HASH,
 	RBTREE,
 	NONE,
-}KVS_TYPE;
+}KVS_TYPE; // indicate for kvs_engine: ARRAY, HASH, RBTREE
 
 #include "kvs_sync.h"
 
