@@ -1,22 +1,22 @@
 CC = gcc
 
 TESTCASE1.1 = set
-TESTCASE1.1_SRCS = ./set.c
+TESTCASE1.1_SRCS = ./testcase_sample/set.c
 
 TESTCASE1.2 = get
-TESTCASE1.2_SRCS = ./get.c
+TESTCASE1.2_SRCS = ./testcase_sample/get.c
 
 TESTCASE1.3 = set_save
-TESTCASE1.3_SRCS = ./set_save.c
+TESTCASE1.3_SRCS = ./testcase_sample/set_save.c
 
-TESTCASE2 = set_blog
-TESTCASE2.1_SRCS = ./set_blog.c
+TESTCASE2.1 = set_blog
+TESTCASE2.1_SRCS = ./testcase_sample/set_blog.c
 
-TESTCASE2 = get_blog
-TESTCASE2_SRCS = ./get_blog.c
+TESTCASE2.2 = get_blog
+TESTCASE2.2_SRCS = ./testcase_sample/get_blog.c
 
 TESTCASE3 = multicmd
-TESTCASE3_SRCS = ./multicmd.c
+TESTCASE3_SRCS = ./testcase_sample/multicmd.c
 
 all: $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3) $(TESTCASE2.1) $(TESTCASE2.2) $(TESTCASE3)
 

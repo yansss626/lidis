@@ -1,13 +1,15 @@
 
 CC = gcc
 FLAGS = -I ./NtyCo/core/ -I ./ -L ./NtyCo/ -lntyco -lpthread -luring -ldl -I ./kvs-module/
-SRCS = kvstore.c ./kvs-server/ntyco.c ./kvs-server/proactor.c ./kvs-engine/kvs_array.c ./kvs-engine/kvs_rbtree.c ./kvs-engine/kvs_hash.c ./kvs-server/reactor.c ./kvs-module/kvs_log.c ./kvs-module/kvs_save.c ./kvs-module/kvs_sync.c
+SRCS = kvstore.c ./kvs-server/ntyco.c ./kvs-server/proactor.c ./kvs-engine/kvs_array.c \
+	./kvs-engine/kvs_rbtree.c ./kvs-engine/kvs_hash.c ./kvs-server/reactor.c ./kvs-module/kvs_log.c \
+	./kvs-module/kvs_save.c ./kvs-module/kvs_sync.c
 TARGET = kvstore
 SUBDIR = ./NtyCo/
 
 
-
-OBJS = $(SRCS:.c=.o)
+OBJ_DIR = objs
+OBJS = $(patsubst %.c, $(OBJ_DIR)/%.o, $(SRCS))
 
 all: $(SUBDIR) $(TARGET) 
 
@@ -20,10 +22,11 @@ ECHO:
 $(TARGET): $(OBJS) 
 	$(CC) -o $@ $^ $(FLAGS)
 
-%.o: %.c
-	$(CC) $(FLAGS) -c $^ -o $@
+$(OBJ_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(FLAGS) -c $< -o $@
 
 clean: 
-	rm -rf $(OBJS) $(TARGET) 
+	rm -rf $(OBJ_DIR) $(TARGET) 
 
 

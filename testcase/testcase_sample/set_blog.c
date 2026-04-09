@@ -40,7 +40,7 @@ char * read_blog(FILE * fp){
         
         char *temp = realloc(full_content, total_size + read_bytes + 1);
         if (temp == NULL) {
-            perror("内存分配失败");
+            perror("realloc error");
             free(buffer);
             free(full_content);
             fclose(fp);
