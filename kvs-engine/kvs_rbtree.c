@@ -478,7 +478,7 @@ void kvs_rbtree_destory(kvs_rbtree_t *inst) {
 int kvs_rbtree_set(kvs_rbtree_t *inst, char *key, char *value) {
 
 	if (!inst || !key || !value) return -1;
-
+	if(kvs_rbtree_get(inst, key) != NULL) return 1;
 	rbtree_node *node = (rbtree_node*)kvs_malloc(sizeof(rbtree_node));
 		
 	node->key = kvs_malloc(strlen(key) + 1);
