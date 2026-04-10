@@ -89,7 +89,7 @@ int send_blog(int fd, char * cmd, char *key, char *value){
 }
 
 int array_send_blog(int fd){
-    FILE * fp = fopen("blog.txt", "r");;
+    FILE * fp = fopen("./testcase_sample/blog.txt", "r");;
     if(fp == NULL) return -1;
     char * value = read_blog(fp);
     send_blog(fd, "SET ", "这是一篇博客 ", value);
@@ -97,14 +97,14 @@ int array_send_blog(int fd){
 }
 
 int rbtree_send_blog(int fd){
-    FILE * fp = fopen("blog.txt", "r");;
+    FILE * fp = fopen("./testcase_sample/blog.txt", "r");;
     if(fp == NULL) return -1;
     char * value = read_blog(fp);
     send_blog(fd, "RSET ", "这是一篇博客 ", value);
     fclose(fp);
 }
 int hash_send_blog(int fd){
-    FILE * fp = fopen("blog.txt", "r");;
+    FILE * fp = fopen("./testcase_sample/blog.txt", "r");;
     if(fp == NULL) return -1;
     char * value = read_blog(fp);
     send_blog(fd, "HSET ", "这是一篇博客 ", value);
