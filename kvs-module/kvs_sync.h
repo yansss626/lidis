@@ -15,7 +15,6 @@
     }kvs_slaves;
 
     void server_reader(void *arg);
-    void server_writer(void * arg);
     client_info * client_info_init(int fd);
     int kvs_connect_to_master(char * ip, unsigned short port);
 

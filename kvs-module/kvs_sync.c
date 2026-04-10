@@ -10,7 +10,7 @@
 
 #define MSG_LENGTH 32
 #define SYNC_SIZE 32
-
+#define BUFFER_SIZE 1024
 kvs_slaves global_slaves = {0};
 
 
@@ -67,10 +67,31 @@ int kvs_full_sync(kvs_slaves * inst, client_info * cli){
     kvs_slaves_insert(inst, cli->fd);
     cli->role = 1;
 
-    FILE * fp = fopen("kvs_snapshot.txt", "w");
+    FILE * fp = fopen("kvs_snapshot.txt", "w+");
     if(kvs_write_snapshot(fp) > 0){
-        nty_coroutine * write_co = NULL;
-        nty_coroutine_create(&write_co, server_writer, &(cli->fd));
+        fseek(fp, 0, SEEK_SET);
+        int payload_length = 0;
+        char * buffer = (char *)kvs_malloc(BUFFER_SIZE);
+        int cap = BUFFER_SIZE;
+        if(buffer == NULL) return -2;
+        memset(buffer, 0, BUFFER_SIZE);
+        while(fscanf(fp, "%d*", &payload_length) > 0){
+            int head_len = sprintf(buffer, "%d*", payload_length);
+            int total_len = payload_length + head_len;
+            if(cap < total_len - 1){
+                char * temp = realloc(buffer, total_len);
+                if(temp == NULL){
+                    perror("realloc error");
+                    return -2;
+                }
+                cap = total_len;
+                buffer = temp;
+            }
+            fread(buffer + head_len, 1, payload_length, fp);
+            buffer[total_len] = '\0';
+            int ret = send(cli->fd, buffer, total_len, 0);
+        }
+        kvs_free(buffer);
     }
     else{
         printf("NO need to sync\n");
