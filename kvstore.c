@@ -16,6 +16,10 @@ extern kvs_rbtree_t global_rbtree;
 extern kvs_hash_t global_hash;
 #endif
 
+#if ENABLE_SKIPLIST
+extern kvs_skiplist_t global_skiplist;
+#endif
+
 #if ENABLE_MODULE_SYNC
 extern kvs_slaves global_slaves;
 #endif
@@ -33,6 +37,7 @@ const char *command[] = {
 	"SET", "GET", "DEL", "MOD", "EXIST", "SAVE",
 	"RSET", "RGET", "RDEL", "RMOD", "REXIST", "RSAVE",
 	"HSET", "HGET", "HDEL", "HMOD", "HEXIST", "HSAVE",
+	"LSET", "LGET", "LDEL", "LMOD", "LEXIST", "LSAVE", 
 	"SYNC"
 };
 
@@ -60,6 +65,14 @@ enum {
 	KVS_CMD_HEXIST,
 	KVS_CMD_HSAVE,
 	
+		// skiplist
+	KVS_CMD_LSET,
+	KVS_CMD_LGET,
+	KVS_CMD_LDEL,
+	KVS_CMD_LMOD,
+	KVS_CMD_LEXIST,
+	KVS_CMD_LSAVE,
+
 	KVS_CMD_SYNC,
 
 	KVS_CMD_COUNT,
@@ -391,6 +404,81 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
 		}
 		break;
+#if ENABLE_SKIPLIST
+	case KVS_CMD_LSET:
+		type = SKIPLIST;
+		ret = kvs_skiplist_set(&global_skiplist ,key, value);
+		if (ret < 0) {
+			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+		} else if (ret == 0) {
+			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
+		} else {
+			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+		} 
+		
+		break;
+	case KVS_CMD_LGET: {
+		char *result = kvs_skiplist_get(&global_skiplist, key);
+		if (result == NULL) {
+			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+		} else {
+			int len = strlen(result);
+			if(len > cli->w_cap - cli->w_pos - 2){  // 2 for "\r\n"
+				char * temp = (char *)realloc(cli->wbuf, len + 3);
+				if(temp == NULL) {
+					perror("realloc error");
+					return -1;
+				}
+				cli->wbuf = temp;
+				cli->w_cap = len + 2;
+			}
+			length = sprintf(cli->wbuf + cli->w_pos, "%s\r\n", result);
+		}
+		break;
+	}
+	case KVS_CMD_LDEL:
+		type = SKIPLIST;
+		ret = kvs_skiplist_del(&global_skiplist ,key);
+		if (ret < 0) {
+			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+ 		} else if (ret == 0) {
+			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
+		} else {
+			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+		}
+		break;
+	case KVS_CMD_LMOD:
+		type = SKIPLIST;
+		ret = kvs_skiplist_mod(&global_skiplist ,key, value);
+		if (ret < 0) {
+			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+ 		} else if (ret == 0) {
+			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
+		} else {
+			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+		}
+		break;
+	case KVS_CMD_LEXIST:
+		ret = kvs_skiplist_exist(&global_skiplist ,key);
+		if (ret == 0) {
+			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+		} else {
+			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+		}
+		break;
+	case KVS_CMD_LSAVE:
+		ret = kvs_save_write(&global_skiplist, SKIPLIST);
+		if (ret == 0) {
+			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			is_write_success = 1;
+		} else {
+			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+		}
+		break;
+#endif
 	case KVS_CMD_SYNC:
 		kvs_full_sync(&global_slaves, cli);
 		length = 0;
@@ -460,6 +548,11 @@ int init_kvengine(void) {
 	kvs_hash_create(&global_hash);
 #endif
 
+#if ENABLE_SKIPLIST
+	memset(&global_skiplist, 0, sizeof(kvs_skiplist_t));
+	kvs_skiplist_create(&global_skiplist);
+#endif
+
 	return 0;
 }
 
@@ -472,6 +565,10 @@ void dest_kvengine(void) {
 #endif
 #if ENABLE_HASH
 	kvs_hash_destory(&global_hash);
+#endif
+
+#if ENABLE_SKIPLIST
+	kvs_skiplist_destroy(&global_skiplist);
 #endif
 
 }

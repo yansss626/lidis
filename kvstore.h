@@ -20,10 +20,11 @@
 #define ENABLE_ARRAY		1
 #define ENABLE_RBTREE		1
 #define ENABLE_HASH			1
+#define ENABLE_SKIPLIST		1
 
 #define ENABLE_MODULE_LOG	0
-#define ENABLE_MODULE_SAVE	1
-#define ENABLE_MODULE_SYNC	1
+#define ENABLE_MODULE_SAVE	0
+#define ENABLE_MODULE_SYNC	0
 
 typedef struct client_info_s{
 	int fd;
@@ -44,6 +45,7 @@ typedef enum{
 	ARRAY,
 	HASH,
 	RBTREE,
+	SKIPLIST,
 	NONE,
 }KVS_TYPE; // indicate for kvs_engine: ARRAY, HASH, RBTREE
 
@@ -69,7 +71,7 @@ typedef struct kvs_array_item_s {
 	char *value;
 } kvs_array_item_t;
 
-#define KVS_ARRAY_SIZE		10240
+#define KVS_ARRAY_SIZE		102400
 
 typedef struct kvs_array_s {
 	kvs_array_item_t *table;
@@ -137,7 +139,7 @@ int kvs_rbtree_exist(kvs_rbtree_t *inst, char *key);
 
 #define MAX_KEY_LEN	128
 #define MAX_VALUE_LEN	512
-#define MAX_TABLE_SIZE	1024
+#define MAX_TABLE_SIZE	102400
 
 #define ENABLE_KEY_POINTER	1
 
@@ -177,6 +179,33 @@ int kvs_hash_exist(kvs_hash_t *hash, char *key);
 
 
 #endif
+
+#if ENABLE_SKIPLIST
+
+typedef struct Node{
+    char * key;
+    char * value;
+    struct Node ** forward;
+}Node;
+
+typedef struct SkipList{
+    int level;
+    Node * header;
+}SkipList;
+
+typedef SkipList kvs_skiplist_t;
+
+int kvs_skiplist_create(kvs_skiplist_t * inst);
+void kvs_skiplist_destroy(kvs_skiplist_t * inst);
+int kvs_skiplist_set(kvs_skiplist_t * inst, char *key, char *value);
+char * kvs_skiplist_get(kvs_skiplist_t * inst, char *key);
+int kvs_skiplist_mod(kvs_skiplist_t * inst, char *key, char *value);
+int kvs_skiplist_del(kvs_skiplist_t * inst, char *key);
+int kvs_skiplist_exist(kvs_skiplist_t * inst, char *key);
+
+
+#endif
+
 
 
 void *kvs_malloc(size_t size);
