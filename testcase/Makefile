@@ -18,7 +18,13 @@ TESTCASE2.2_SRCS = ./testcase_sample/get_blog.c
 TESTCASE3 = multicmd
 TESTCASE3_SRCS = ./testcase_sample/multicmd.c
 
-all: $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3) $(TESTCASE2.1) $(TESTCASE2.2) $(TESTCASE3)
+TESTCASE1 = test_function
+TESTCASE1_SRCS = ./testcase_sample/test_function.c
+
+all: $(TESTCASE1) $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3) $(TESTCASE2.1) $(TESTCASE2.2) $(TESTCASE3) 
+
+$(TESTCASE1): $(TESTCASE1_SRCS)
+	$(CC) -o $@ $^
 
 $(TESTCASE1.1): $(TESTCASE1.1_SRCS)
 	$(CC) -o $@ $^
@@ -39,4 +45,4 @@ $(TESTCASE3): $(TESTCASE3_SRCS)
 	$(CC) -o $@ $^	
 
 clean: 
-	rm -rf $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3) $(TESTCASE2.1) $(TESTCASE2.2) $(TESTCASE3)
+	rm -rf $(TESTCASE1) $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3) $(TESTCASE2.1) $(TESTCASE2.2) $(TESTCASE3)
