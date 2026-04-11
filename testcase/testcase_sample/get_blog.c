@@ -85,7 +85,14 @@ int hash_get(int fd){
     get_and_recv_blog(fd, "HGET ", "这是一篇博客");
 
 }
-//testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash
+
+
+int skiplist_get(int fd){
+
+    get_and_recv_blog(fd, "LGET ", "这是一篇博客");
+
+}
+//testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash 3 for skiplist
 int main(int argc, char *argv[]) {
 
 	if (argc != 4) {
@@ -106,6 +113,9 @@ int main(int argc, char *argv[]) {
     }
     else if(mode == 2){
         hash_get(connfd);
+    }
+    else if(mode == 3){
+        skiplist_get(connfd);
     }
 
     close(connfd);

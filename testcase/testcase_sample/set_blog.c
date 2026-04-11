@@ -111,11 +111,19 @@ int hash_send_blog(int fd){
     fclose(fp);
 }
 
+int skiplist_send_blog(int fd){
+    FILE * fp = fopen("./testcase_sample/blog.txt", "r");;
+    if(fp == NULL) return -1;
+    char * value = read_blog(fp);
+    send_blog(fd, "LSET ", "这是一篇博客 ", value);
+    fclose(fp);
+}
 
 
 
 
-//testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash
+
+//testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash 3 for skiplist
 int main(int argc, char *argv[]) {
 
 	if (argc != 4) {
@@ -136,6 +144,9 @@ int main(int argc, char *argv[]) {
     }
     else if(mode == 2){
         hash_send_blog(connfd);
+    }
+    else if(mode == 3){
+        skiplist_send_blog(connfd);
     }
 
 

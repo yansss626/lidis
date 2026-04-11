@@ -2,11 +2,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
-#include <sys/time.h>
 // **************** testcase for log module ****************
 // *************************************** GET for 10000 times ******************
 #define MAX_MSG_LENGTH		1024
-#define TIME_SUB_MS(tv1, tv2)  ((tv1.tv_sec - tv2.tv_sec) * 1000 + (tv1.tv_usec - tv2.tv_usec) / 1000)
+
 
 
 int send_msg(int connfd, char *msg, int length) {
@@ -77,13 +76,11 @@ int connect_tcpserver(const char *ip, unsigned short port) {
 }
 
 
-void rbtree_testcase_1w(int connfd) {
+void rbtree_testcase(int connfd, int count) {
 
-	int count = 10000;
 	int i = 0;
 
-	struct timeval tv_begin;
-	gettimeofday(&tv_begin, NULL);
+
 
 	for (i = 0;i < count;i ++) {
 
@@ -94,22 +91,13 @@ void rbtree_testcase_1w(int connfd) {
 		testcase(connfd, cmd, res, "RGET-Teacher");
 	}
 
-	struct timeval tv_end;
-	gettimeofday(&tv_end, NULL);
 
-	int time_used = TIME_SUB_MS(tv_end, tv_begin); // ms
-
-	printf("rbtree testcase --> time_used: %d, qps: %d\n", time_used, 10000 * 1000 / time_used);
 
 }
 
-void array_testcase_1w(int connfd) {
+void array_testcase(int connfd, int count) {
 
-	int count = 10000;
 	int i = 0;
-
-	struct timeval tv_begin;
-	gettimeofday(&tv_begin, NULL);
 
 	for (i = 0;i < count;i ++) {
 
@@ -120,21 +108,13 @@ void array_testcase_1w(int connfd) {
 		testcase(connfd, cmd, res, "GET-Teacher");
 	}
 
-	struct timeval tv_end;
-	gettimeofday(&tv_end, NULL);
-
-	int time_used = TIME_SUB_MS(tv_end, tv_begin); // ms
-
-	printf("array testcase --> time_used: %d, qps: %d\n", time_used, 10000 * 1000 / time_used);
 
 }
-void hash_testcase_1w(int connfd) {
+void hash_testcase(int connfd, int count) {
 
-	int count = 10000;
 	int i = 0;
 
-	struct timeval tv_begin;
-	gettimeofday(&tv_begin, NULL);
+
 
 	for (i = 0;i < count;i ++) {
 
@@ -145,18 +125,27 @@ void hash_testcase_1w(int connfd) {
 		testcase(connfd, cmd, res, "HGET-Teacher");
 	}
 
-	struct timeval tv_end;
-	gettimeofday(&tv_end, NULL);
-
-	int time_used = TIME_SUB_MS(tv_end, tv_begin); // ms
-
-	printf("hash testcase --> time_used: %d, qps: %d\n", time_used, 10000 * 1000 / time_used);
 
 }
 
-void testcase_1w(int connfd){
+void skiplist_testcase(int connfd, int count) {
 
-	int count = 10000;
+	int i = 0;
+
+	for (i = 0;i < count;i ++) {
+
+		char cmd[128] = {0};
+        char res[128] = {0};
+		snprintf(cmd, 128, "LGET Teacher%d", i);
+        snprintf(res, 128, "King%d\r\n", i);
+		testcase(connfd, cmd, res, "LGET-Teacher");
+	}
+
+
+}
+
+void testcase_(int connfd, int count){
+
 	int i = 0;
 
 	for (i = 0;i < count;i ++) {
@@ -184,13 +173,21 @@ void testcase_1w(int connfd){
         snprintf(res, 128, "King%d\r\n", i);
 		testcase(connfd, cmd, res, "GET-Teacher");
 	}
+	for (i = 0;i < count;i ++) {
+
+		char cmd[128] = {0};
+        char res[128] = {0};
+		snprintf(cmd, 128, "LGET Teacher%d", i);
+        snprintf(res, 128, "King%d\r\n", i);
+		testcase(connfd, cmd, res, "LGET-Teacher");
+	}
 
 
 	
 }
 
 
-// testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash 
+// testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash 3 for skiplist
 int main(int argc, char *argv[]) {
 
 	if (argc < 3) {
@@ -202,15 +199,16 @@ int main(int argc, char *argv[]) {
 	int port = atoi(argv[2]);
 
 	int connfd = connect_tcpserver(ip, port);
-
+	int count = 10000;
 	if(argc == 4){
 		int mode = atoi(argv[3]);
-		if(mode == 0) rbtree_testcase_1w(connfd);
-		else if(mode == 1) array_testcase_1w(connfd);
-		else if (mode == 2) hash_testcase_1w(connfd);
+		if(mode == 0) rbtree_testcase(connfd, count);
+		else if(mode == 1) array_testcase(connfd, count);
+		else if (mode == 2) hash_testcase(connfd, count);
+		else if (mode == 3) skiplist_testcase(connfd,count);
 	}
 	else if(argc == 3){
-		testcase_1w(connfd);
+		testcase_(connfd, count);
 	}
 
 

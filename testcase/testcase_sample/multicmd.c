@@ -6,7 +6,7 @@
 // **************** testcase for send multiple command at once  ****************
 // ***************************************     建议服务端BUFFER SIZE 设置为 1024          ******************
 #define MAX_MSG_LENGTH		4096
-#define TIME_SUB_MS(tv1, tv2)  ((tv1.tv_sec - tv2.tv_sec) * 1000 + (tv1.tv_usec - tv2.tv_usec) / 1000)
+
 
 
 int send_msg(int connfd, char *msg, int length) {
@@ -70,9 +70,8 @@ int connect_tcpserver(const char *ip, unsigned short port) {
 }
 
 
-void rbtree_testcase_1w(int connfd) {
+void rbtree_testcase(int connfd, int count) {
 
-	int count = 10;
 	int i = 0;
 
     char cmd[MAX_MSG_LENGTH] = {0};
@@ -123,9 +122,8 @@ void rbtree_testcase_1w(int connfd) {
 
 }
 
-void array_testcase_1w(int connfd) {
+void array_testcase(int connfd, int count) {
 
-	int count = 10;
 	int i = 0;
 
     char cmd[MAX_MSG_LENGTH] = {0};
@@ -177,9 +175,8 @@ void array_testcase_1w(int connfd) {
 
 
 }
-void hash_testcase_1w(int connfd) {
+void hash_testcase(int connfd, int count) {
 
-	int count = 10;
 	int i = 0;
 
     char cmd[MAX_MSG_LENGTH] = {0};
@@ -232,7 +229,60 @@ void hash_testcase_1w(int connfd) {
 }
 
 
-// testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash 
+void skiplist_testcase(int connfd, int count) {
+
+	int i = 0;
+
+    char cmd[MAX_MSG_LENGTH] = {0};
+    int total_length = 0;
+	for (i = 0;i < count;i ++) {
+        
+        char temp[128] = {0};
+        snprintf(temp, 128, "LSET Teacher%d King%d", i, i);
+        
+        total_length  += snprintf(cmd + total_length, MAX_MSG_LENGTH, "%ld*%s", strlen(temp), temp);
+
+	}
+    for (i = 0;i < count;i ++) {
+        
+        char temp[128] = {0};
+        snprintf(temp, 128, "LGET Teacher%d",i);
+        
+        total_length  += snprintf(cmd + total_length, MAX_MSG_LENGTH, "%ld*%s", strlen(temp), temp);
+		
+	}
+    for (i = 0;i < count;i ++) {
+        
+        char temp[128] = {0};
+        snprintf(temp, 128, "LMOD Teacher%d King9%d", i, i);
+        
+        total_length  += snprintf(cmd + total_length, MAX_MSG_LENGTH, "%ld*%s", strlen(temp), temp);
+
+	}
+    for (i = 0;i < count;i ++) {
+        
+        char temp[128] = {0};
+        snprintf(temp, 128, "LDEL Teacher%d", i);
+        
+        total_length  += snprintf(cmd + total_length, MAX_MSG_LENGTH, "%ld*%s", strlen(temp), temp);
+
+	}
+    for (i = 0;i < count;i ++) {
+        
+        char temp[128] = {0};
+        snprintf(temp, 128, "LEXIST Teacher%d", i);
+        
+        total_length  += snprintf(cmd + total_length, MAX_MSG_LENGTH, "%ld*%s", strlen(temp), temp);
+
+	}
+    // printf("strlen: %ld\n", strlen(cmd));
+    // printf("%s\n", cmd);
+
+    testcase(connfd, cmd);
+
+}
+
+// testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash 3 for skiplist
 int main(int argc, char *argv[]) {
 
 	if (argc != 4) {
@@ -245,11 +295,11 @@ int main(int argc, char *argv[]) {
 	int mode = atoi(argv[3]);
 
 	int connfd = connect_tcpserver(ip, port);
-
-	if(mode == 0) rbtree_testcase_1w(connfd);
-	else if(mode == 1) array_testcase_1w(connfd);
-	else if (mode == 2) hash_testcase_1w(connfd);
-
+    int count = 10;
+	if(mode == 0) rbtree_testcase(connfd, count);
+	else if(mode == 1) array_testcase(connfd, count);
+	else if (mode == 2) hash_testcase(connfd, count);
+    else if (mode == 3) skiplist_testcase(connfd, count);
 
 	return 0;
 	
