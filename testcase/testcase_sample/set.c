@@ -138,34 +138,10 @@ void testcase_(int connfd, int count){
 
 	int i = 0;
 
-	for (i = 0;i < count;i ++) {
-
-		char cmd[128] = {0};
-		snprintf(cmd, 128, "RSET Teacher%d King%d", i, i);
-		testcase(connfd, cmd, "OK\r\n", cmd);
-	}
-
-	for (i = 0;i < count;i ++) {
-
-		char cmd[128] = {0};
-		snprintf(cmd, 128, "HSET Teacher%d King%d", i, i);
-		testcase(connfd, cmd, "OK\r\n", cmd);
-	}
-
-	for (i = 0;i < count;i ++) {
-
-		char cmd[128] = {0};
-		snprintf(cmd, 128, "SET Teacher%d King%d", i, i);
-		testcase(connfd, cmd, "OK\r\n", cmd);
-	}
-
-	for (i = 0;i < count;i ++) {
-
-		char cmd[128] = {0};
-		snprintf(cmd, 128, "LSET Teacher%d King%d", i, i);
-		testcase(connfd, cmd, "OK\r\n", cmd);
-	}
-
+	rbtree_testcase(connfd, count);
+	skiplist_testcase(connfd, count);
+	array_testcase(connfd, count);
+	hash_testcase(connfd, count);
 }
 
 // testcase 192.168.243.131  2000 mode: 0 for rbtree, 1 for array, 2 for hash 3 for skiplist
