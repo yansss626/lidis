@@ -9,7 +9,7 @@
 static FILE * fp_array = NULL;
 static FILE * fp_hash = NULL;
 static FILE * fp_rbtree = NULL;
-
+static FILE * fp_skiplist = NULL;
 
 static msg_handler kvs_handler;
 
@@ -122,6 +122,13 @@ int kvs_log_init(msg_handler handler){
     kvs_log_read(fp_rbtree);
 #endif
 
+#if ENABLE_SKIPLIST
+    fp_skiplist = fopen("./kvs-module/kvs_skiplist.log", "a+");
+    if(fp_skiplist == NULL) return -1;
+    fseek(fp_skiplist, 0, SEEK_SET);
+    kvs_log_read(fp_skiplist);
+#endif
+
     return 0;
 
 }
@@ -148,6 +155,7 @@ int kvs_log_write(KVS_TYPE cmd_type, client_info * cli){
     if(cmd_type == ARRAY) fp = fp_array;
     else if(cmd_type == HASH) fp = fp_hash;
     else if(cmd_type == RBTREE) fp = fp_rbtree;
+    else if(cmd_type ==  SKIPLIST) fp = fp_skiplist;
     if(fp == NULL) return -2;
     fprintf(fp, "%s\r\n", cli->rbuf);
     //fprintf(fp, "%s %s %s\r\n", kvs_cmd, key, value); // 无协议
@@ -159,6 +167,7 @@ int kvs_log_close(){
     if(fp_array != NULL) fclose(fp_array);
     if(fp_hash != NULL) fclose(fp_hash);
     if(fp_rbtree != NULL) fclose(fp_rbtree);
+    if(fp_skiplist != NULL) fclose(fp_skiplist);
     return 0;
 }
 

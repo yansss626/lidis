@@ -25,6 +25,11 @@ extern kvs_rbtree_t global_rbtree;
 #if ENABLE_HASH
 extern kvs_hash_t global_hash;
 #endif
+
+#if ENABLE_SKIPLIST
+extern kvs_skiplist_t global_skiplist;
+#endif
+
 int kvs_write_snapshot(FILE * fp);
 
 int kvs_connect_to_master(char * ip, unsigned short port){
@@ -164,6 +169,18 @@ int kvs_write_snapshot(FILE * fp){
 
        
 #endif
+
+#if ENABLE_SKIPLIST
+    kvs_skiplist_t * L_inst = &global_skiplist;
+    Node * current = L_inst->header->forward[0];
+    while(current != NULL){
+        payload_length = strlen(current->key) + strlen(current->value) + 2 + strlen("LSET");
+        fprintf(fp, "%d*LSET %s %s\r\n", payload_length, current->key, current->value);
+        current = current->forward[0];
+    }
+
+#endif
+    fflush(fp);
     return payload_length;
 }
 

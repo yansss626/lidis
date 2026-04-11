@@ -24,7 +24,7 @@
 
 #define ENABLE_MODULE_LOG	0
 #define ENABLE_MODULE_SAVE	0
-#define ENABLE_MODULE_SYNC	0
+#define ENABLE_MODULE_SYNC	1
 
 typedef struct client_info_s{
 	int fd;

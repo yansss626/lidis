@@ -39,6 +39,14 @@ int kvs_save_init(msg_handler handler){
     }
 #endif
 
+#if ENABLE_SKIPLIST
+    fp = fopen("./kvs-module/kvs_skiplist.txt", "r");
+    if(fp != NULL) {
+        kvs_save_read(fp);
+        fclose(fp);
+    }
+#endif
+
 
     return 0;
 }
@@ -110,6 +118,24 @@ int kvs_save_write(void * arg, KVS_TYPE cmd_type){
         fclose(fp);
     }
        
+#endif
+
+#if ENABLE_SKIPLIST
+    if(cmd_type == SKIPLIST){
+        kvs_skiplist_t * inst = (kvs_skiplist_t *)arg;
+        fp = fopen("./kvs-module/kvs_skiplist.txt", "w");
+        if(fp == NULL) return -2;
+        Node * current = inst->header->forward[0];
+        while(current != NULL){
+            int payload_length = strlen(current->key) + strlen(current->value) + 2 + strlen("LSET");
+            fprintf(fp, "%d*LSET %s %s\r\n", payload_length, current->key, current->value);
+            current = current->forward[0];
+        }
+        fflush(fp);
+        fclose(fp);
+    }
+
+
 #endif
     
     return 0;
