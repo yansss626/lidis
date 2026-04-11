@@ -29,7 +29,7 @@
     #define kvs_connect_to_master(ip, port) (0)
     #define kvs_slaves_delete(inst, fd) (0)
     #define kvs_full_sync(inst, cli)    (0)
-    #define kvs_incr_sync(inst, cli, count, tokens) (0)
+    #define kvs_incr_sync(inst, cli) (0)
     #define kvs_slaves_destroy(inst)    (0)
 #endif
 

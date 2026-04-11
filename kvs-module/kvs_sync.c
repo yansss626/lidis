@@ -94,7 +94,7 @@ int kvs_full_sync(kvs_slaves * inst, client_info * cli){
         kvs_free(buffer);
     }
     else{
-        printf("NO need to sync\n");
+        //printf("NO need to sync\n");
     }
     fclose(fp);
     
