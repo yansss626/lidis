@@ -30,7 +30,7 @@ typedef struct client_info_s {
     int role;        // 节点角色标示：0 为 Master（主），1 为 Slave（从）
 } client_info
 ```
-### 网络层IO处理逻辑
+### 3. 网络层IO处理逻辑
 
 #### 1：接收数据，解析长度
 ```c
