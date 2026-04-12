@@ -304,8 +304,30 @@ if(cli_info->role == 1) cli_info->w_pos = 0; // slave doesn't reply
 else ret = send(cli_info->fd, cli_info->wbuf, cli_info->w_pos, 0);
 ```
 
+## 测试方案
+
+### set.c 
+    模拟客户端发送SET/RSET/LSET/HSET命令，若kvstore成功响应，打印结果。
 
 
+### get.c
+    模拟客户端发送GET/RGET/LGET/HGET命令，若kvstore成功响应，打印结果。
+
+### set_save.c
+    模拟客户端发送GET/RGET/LGET/HGET命令后，再发送SAVE/RSAVE/HSAVE/LSAVE 若kvstore成功响应，打印结果。
+
+### set_blog.c
+    模拟客户端发送大key大value键值对，打印接收结果。
+
+### get_blog.c
+    模拟客户端发送GET 大key，打印set_blog.c插入的大value。
+
+### multicmd.c
+    模拟客户端一次性发送五十条指令，打印返回结果。
+
+
+### test_function.c
+    测试kvstore基本功能是否正常。    
 
 ## Kvstore 性能
 
