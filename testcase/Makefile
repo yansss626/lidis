@@ -9,6 +9,9 @@ TESTCASE1.2_SRCS = ./testcase_sample/get.c
 TESTCASE1.3 = set_save
 TESTCASE1.3_SRCS = ./testcase_sample/set_save.c
 
+TESTCASE1.4 = del
+TESTCASE1.4_SRCS = ./testcase_sample/del.c
+
 TESTCASE2.1 = set_blog
 TESTCASE2.1_SRCS = ./testcase_sample/set_blog.c
 
@@ -21,7 +24,7 @@ TESTCASE3_SRCS = ./testcase_sample/multicmd.c
 TESTCASE1 = test_function
 TESTCASE1_SRCS = ./testcase_sample/test_function.c
 
-all: $(TESTCASE1) $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3) $(TESTCASE2.1) $(TESTCASE2.2) $(TESTCASE3) 
+all: $(TESTCASE1) $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3) $(TESTCASE1.4) $(TESTCASE2.1) $(TESTCASE2.2) $(TESTCASE3) 
 
 $(TESTCASE1): $(TESTCASE1_SRCS)
 	$(CC) -o $@ $^
@@ -35,6 +38,9 @@ $(TESTCASE1.2): $(TESTCASE1.2_SRCS)
 $(TESTCASE1.3): $(TESTCASE1.3_SRCS)
 	$(CC) -o $@ $^	
 
+$(TESTCASE1.4): $(TESTCASE1.4_SRCS)
+	$(CC) -o $@ $^	
+
 $(TESTCASE2.1): $(TESTCASE2.1_SRCS)
 	$(CC) -o $@ $^	
 
@@ -45,4 +51,4 @@ $(TESTCASE3): $(TESTCASE3_SRCS)
 	$(CC) -o $@ $^	
 
 clean: 
-	rm -rf $(TESTCASE1) $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3) $(TESTCASE2.1) $(TESTCASE2.2) $(TESTCASE3)
+	rm -rf $(TESTCASE1) $(TESTCASE1.1) $(TESTCASE1.2) $(TESTCASE1.3) $(TESTCASE1.4) $(TESTCASE2.1) $(TESTCASE2.2) $(TESTCASE3)
