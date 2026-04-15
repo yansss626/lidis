@@ -6,10 +6,8 @@
 
 #if ENABLE_MODULE_LOG
 #define BUFFER_SIZE 1024
-static FILE * fp_array = NULL;
-static FILE * fp_hash = NULL;
-static FILE * fp_rbtree = NULL;
-static FILE * fp_skiplist = NULL;
+
+static FILE * fp_log = NULL;
 
 static msg_handler kvs_handler;
 
@@ -101,73 +99,28 @@ int kvs_log_read(FILE * fp){
 
 int kvs_log_init(msg_handler handler){
     kvs_handler = handler;
-#if ENABLE_ARRAY
-    fp_array = fopen("./kvs-module/kvs_array.log", "a+");
-    if(fp_array == NULL) return -1;
-    fseek(fp_array, 0, SEEK_SET);
-    kvs_log_read(fp_array);
-#endif
 
-#if ENABLE_HASH
-    fp_hash = fopen("./kvs-module/kvs_hash.log", "a+");
-    if(fp_hash == NULL) return -1;
-    fseek(fp_hash, 0, SEEK_SET);
-    kvs_log_read(fp_hash);
-#endif
-
-#if ENABLE_RBTREE
-    fp_rbtree = fopen("./kvs-module/kvs_rbtree.log", "a+");
-    if(fp_rbtree == NULL) return -1;
-    fseek(fp_rbtree, 0, SEEK_SET);
-    kvs_log_read(fp_rbtree);
-#endif
-
-#if ENABLE_SKIPLIST
-    fp_skiplist = fopen("./kvs-module/kvs_skiplist.log", "a+");
-    if(fp_skiplist == NULL) return -1;
-    fseek(fp_skiplist, 0, SEEK_SET);
-    kvs_log_read(fp_skiplist);
-#endif
+    fp_log = fopen("./kvs-module/kvs_appendonly.aof", "a+");
+    if(fp_log == NULL) return -1;
+    fseek(fp_log, 0, SEEK_SET);
+    kvs_log_read(fp_log);
 
     return 0;
 
 }
 
 
-// int kvs_log_write(KVS_LOG_TYPE cmd_type, char * kvs_cmd, char * key, char * value){
-//     if (kvs_cmd == NULL || key == NULL || value == NULL) return -1;
 
-//     FILE * fp = NULL;
-//     if(cmd_type == LOG_ARRAY) fp = fp_array;
-//     else if(cmd_type == LOG_HASH) fp = fp_hash;
-//     else if(cmd_type == LOG_RBTREE) fp = fp_rbtree;
-//     if(fp == NULL) return -2;
-//     int payload_length = strlen(kvs_cmd) + strlen(key) + strlen(value) + 2;
-//     fprintf(fp, "%d*%s %s %s\r\n", payload_length, kvs_cmd, key, value);
-//     //fprintf(fp, "%s %s %s\r\n", kvs_cmd, key, value); // 无协议
-//     fflush(fp);
-//     return 0;
-// }
-
-int kvs_log_write(KVS_TYPE cmd_type, client_info * cli){
+int kvs_log_write(client_info * cli){
     if (cli == NULL) return -1;
-    FILE * fp = NULL;
-    if(cmd_type == ARRAY) fp = fp_array;
-    else if(cmd_type == HASH) fp = fp_hash;
-    else if(cmd_type == RBTREE) fp = fp_rbtree;
-    else if(cmd_type ==  SKIPLIST) fp = fp_skiplist;
-    if(fp == NULL) return -2;
-    fprintf(fp, "%s\r\n", cli->rbuf);
-    //fprintf(fp, "%s %s %s\r\n", kvs_cmd, key, value); // 无协议
-    fflush(fp);
+    if (fp_log == NULL) return -2;
+    fprintf(fp_log, "%s\r\n", cli->rbuf);
+    fflush(fp_log);
     return 0;
 }
 
 int kvs_log_close(){
-    if(fp_array != NULL) fclose(fp_array);
-    if(fp_hash != NULL) fclose(fp_hash);
-    if(fp_rbtree != NULL) fclose(fp_rbtree);
-    if(fp_skiplist != NULL) fclose(fp_skiplist);
+    if(fp_log != NULL) fclose(fp_log);
     return 0;
 }
 

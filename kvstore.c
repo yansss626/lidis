@@ -495,7 +495,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			(tokens[i])[pos] = ' ';
 		} // repair cli->rbuf due to kvs_split_token
 		if(is_recovering == 0){
-			kvs_log_write(type, cli);
+			kvs_log_write(cli);
 		} 
 		kvs_incr_sync(&global_slaves, cli);
 	}

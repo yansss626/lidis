@@ -22,7 +22,7 @@
 #define ENABLE_HASH			1
 #define ENABLE_SKIPLIST		1
 
-#define ENABLE_MODULE_LOG	0
+#define ENABLE_MODULE_LOG	1
 #define ENABLE_MODULE_SAVE	0
 #define ENABLE_MODULE_SYNC	1
 
@@ -216,15 +216,13 @@ void kvs_free(void *ptr);
 
 
 	int kvs_log_init(msg_handler handler);
-	//int kvs_log_write(KVS_TYPE cmd_type, char * kvs_cmd, char * key, char * value);
-	int kvs_log_write(KVS_TYPE cmd_type, client_info * cli);
+	int kvs_log_write(client_info * cli);
 	int kvs_log_close();
 
 #else
 
 	#define kvs_log_init(handler)	(0)
-	//#define kvs_log_write(cmd_type, kvs_cmd, key, value)	(0)
-	#define kvs_log_write(cmd_type, cli)	(0)
+	#define kvs_log_write(cli)	(0)
 	#define kvs_log_close()	(0)
 #endif
 
