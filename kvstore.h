@@ -22,7 +22,7 @@
 #define ENABLE_HASH			1
 #define ENABLE_SKIPLIST		1
 
-#define ENABLE_MODULE_LOG	1
+#define ENABLE_MODULE_LOG	0
 #define ENABLE_MODULE_SAVE	0
 #define ENABLE_MODULE_SYNC	1
 
@@ -41,13 +41,7 @@ typedef struct client_info_s{
 	int role; // 0:master 1:slave
 }client_info;
 
-typedef enum{
-	ARRAY,
-	HASH,
-	RBTREE,
-	SKIPLIST,
-	NONE,
-}KVS_TYPE; // indicate for kvs_engine: ARRAY, HASH, RBTREE
+
 
 #include "kvs_sync.h"
 
@@ -231,12 +225,12 @@ void kvs_free(void *ptr);
 	
 
 	int kvs_save_init(msg_handler handler);
-	int kvs_save_write(void * arg ,KVS_TYPE cmd_type);
+	int kvs_save_write();
 	int kvs_save_read();
 
 #else
 	#define kvs_save_init(handler)	(0)
-	#define kvs_save_write(arg, cmd_type) (0)
+	#define kvs_save_write() (0)
 	#define kvs_save_read()	(0)
 	
 #endif

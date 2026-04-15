@@ -89,9 +89,6 @@ void rbtree_testcase(int connfd, int count) {
 		snprintf(cmd, 128, "RSET Teacher%d King%d", i, i);
 		testcase(connfd, cmd, "OK\r\n", cmd);
 	}
-    char cmd[128] = {0};
-	snprintf(cmd, 128, "RSAVE Teacher%d King%d", i, i);
-	testcase(connfd, cmd, "OK\r\n", "RSAVE");
 
 
 
@@ -108,10 +105,6 @@ void array_testcase(int connfd, int count) {
 		snprintf(cmd, 128, "SET Teacher%d King%d", i, i);
 		testcase(connfd, cmd, "OK\r\n", cmd);
 	}
-    char cmd[128] = {0};
-	snprintf(cmd, 128, "SAVE Teacher%d King%d", i, i);
-	testcase(connfd, cmd, "OK\r\n", "SAVE");
-
 
 }
 void hash_testcase(int connfd, int count) {
@@ -125,9 +118,7 @@ void hash_testcase(int connfd, int count) {
 		snprintf(cmd, 128, "HSET Teacher%d King%d", i, i);
 		testcase(connfd, cmd, "OK\r\n", cmd);
 	}
-    char cmd[128] = {0};
-	snprintf(cmd, 128, "HSAVE Teacher%d King%d", i, i);
-	testcase(connfd, cmd, "OK\r\n", "HSAVE");
+
 
 
 
@@ -145,9 +136,7 @@ void skiplist_testcase(int connfd, int count) {
 		snprintf(cmd, 128, "LSET Teacher%d King%d", i, i);
 		testcase(connfd, cmd, "OK\r\n", cmd);
 	}
-    char cmd[128] = {0};
-	snprintf(cmd, 128, "LSAVE Teacher%d King%d", i, i);
-	testcase(connfd, cmd, "OK\r\n", "LSAVE");
+
 
 
 
@@ -158,7 +147,8 @@ void testcase_(int connfd, int count){
 	rbtree_testcase(connfd, count);
 	skiplist_testcase(connfd, count);
 	array_testcase(connfd, count);
-	
+	char cmd[128] = "SAVE";
+	testcase(connfd, cmd, "OK\r\n", "SAVE");
 }
 
 

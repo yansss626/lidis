@@ -9,44 +9,29 @@
 
 static msg_handler kvs_handler;
 
-
-
-int kvs_save_init(msg_handler handler){
-    kvs_handler = handler;
-    FILE * fp = NULL;
 #if ENABLE_ARRAY
-    fp = fopen("./kvs-module/kvs_array.txt", "r");
-    if(fp != NULL) {
-        kvs_save_read(fp);
-        fclose(fp);
-    }
-
-#endif
-
-#if ENABLE_HASH
-    fp = fopen("./kvs-module/kvs_hash.txt", "r");
-    if(fp != NULL) {
-        kvs_save_read(fp);
-        fclose(fp);
-    }
+extern kvs_array_t global_array;
 #endif
 
 #if ENABLE_RBTREE
-    fp = fopen("./kvs-module/kvs_rbtree.txt", "r");
-    if(fp != NULL) {
-        kvs_save_read(fp);
-        fclose(fp);
-    }
+extern kvs_rbtree_t global_rbtree;
+#endif
+
+#if ENABLE_HASH
+extern kvs_hash_t global_hash;
 #endif
 
 #if ENABLE_SKIPLIST
-    fp = fopen("./kvs-module/kvs_skiplist.txt", "r");
-    if(fp != NULL) {
-        kvs_save_read(fp);
-        fclose(fp);
-    }
+extern kvs_skiplist_t global_skiplist;
 #endif
 
+int kvs_save_init(msg_handler handler){
+    kvs_handler = handler;
+    FILE * fp = fopen("./kvs-module/kvs_dump.rdb", "r"); 
+    if(fp == NULL) return -2;
+
+    kvs_save_read(fp);
+    fclose(fp);
 
     return 0;
 }
@@ -67,28 +52,20 @@ void kvs_save_write_rbtree(rbtree *T, rbtree_node *node, FILE * fp) {
 }
 #endif
 
-int kvs_save_write(void * arg, KVS_TYPE cmd_type){
-    if(arg == NULL) return -1;
-    FILE * fp = NULL;
+int kvs_save_write(){
 
+    FILE * fp = fopen("./kvs-module/kvs_dump.rdb", "w+"); 
+    if(fp == NULL) return -2;
 #if ENABLE_RBTREE    
-    if(cmd_type == RBTREE) {
-        kvs_rbtree_t * inst = (kvs_rbtree_t *) arg; 
-        fp = fopen("./kvs-module/kvs_rbtree.txt", "w");
-        if(fp == NULL) return -2;
-        kvs_save_write_rbtree(inst, inst->root, fp);
-        fflush(fp);
-        fclose(fp);
-    }
+    kvs_rbtree_t * R_inst = &global_rbtree;
+    kvs_save_write_rbtree(R_inst, R_inst->root, fp);
 #endif
 
 #if ENABLE_HASH
-    if(cmd_type == HASH){
-        kvs_hash_t * inst = (kvs_hash_t *)arg;
-        fp = fopen("./kvs-module/kvs_hash.txt", "w");
-        if(fp == NULL) return -2;    
-        for (int i = 0;i < inst->max_slots;i ++) {
-            hashnode_t *node = inst->nodes[i];
+    kvs_hash_t * H_inst = &global_hash;
+    if(H_inst->count > 0){
+        for (int i = 0;i < H_inst->max_slots;i ++) {
+            hashnode_t *node = H_inst->nodes[i];
             while (node != NULL) { 
                 int payload_length = strlen(node->key) + strlen(node->value) + 2 + strlen("HSET");
                 //fprintf(fp, "HSET %s %s\r\n", node->key, node->value);
@@ -97,16 +74,14 @@ int kvs_save_write(void * arg, KVS_TYPE cmd_type){
                 
             }
         }   
-        fflush(fp);
-        fclose(fp);
     }
+    
 #endif
 
 #if ENABLE_ARRAY
-    if(cmd_type == ARRAY){
-        kvs_array_t * inst = (kvs_array_t *)arg;
-        fp = fopen("./kvs-module/kvs_array.txt", "w");
-        if(fp == NULL) return -2;
+
+    kvs_array_t * inst = &global_array;
+    if(inst->table > 0){
         for (int i = 0;i < KVS_ARRAY_SIZE;i ++) {
             if (inst->table[i].key != NULL) {
                 int payload_length = strlen(inst->table[i].key) + strlen(inst->table[i].value) + 2 + strlen("SET");
@@ -114,32 +89,27 @@ int kvs_save_write(void * arg, KVS_TYPE cmd_type){
                 fprintf(fp, "%d*SET %s %s\r\n", payload_length, inst->table[i].key, inst->table[i].value);
             }
         }
-        fflush(fp);
-        fclose(fp);
     }
+
        
 #endif
 
 #if ENABLE_SKIPLIST
-    if(cmd_type == SKIPLIST){
-        kvs_skiplist_t * inst = (kvs_skiplist_t *)arg;
-        fp = fopen("./kvs-module/kvs_skiplist.txt", "w");
-        if(fp == NULL) return -2;
-        Node * current = inst->header->forward[0];
+
+        kvs_skiplist_t * L_inst = &global_skiplist;
+        Node * current = L_inst->header->forward[0];
         while(current != NULL){
             int payload_length = strlen(current->key) + strlen(current->value) + 2 + strlen("LSET");
             fprintf(fp, "%d*LSET %s %s\r\n", payload_length, current->key, current->value);
             current = current->forward[0];
         }
-        fflush(fp);
-        fclose(fp);
-    }
 
 
 #endif
-    
+
+    fflush(fp);
+    fclose(fp); 
     return 0;
-    
 
 }
 
