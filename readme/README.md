@@ -80,7 +80,6 @@ if(cli_info->w_pos > 0){
 | **MOD** | `<key> <value>` | 修改已存在的 Key 对应的 Value | OK / NO EXIST | ERROR |
 | **DEL** | `<key>` | 从存储引擎中删除指定的 Key-Value | OK / NO EXIST | ERROR |
 | **EXIST** | `<key>` | 查询指定的 Key 是否存在于系统中 | EXIST / NO EXIST | ERROR |
-| **SAVE** | (None) | 将当前内存数据持久化到磁盘文件.txt | OK | ERROR |
  
 ### 哈希 （hash）
 | 指令  | 参数  | 功能说明  | 成功响应  | 失败响应  |
@@ -90,7 +89,6 @@ if(cli_info->w_pos > 0){
 | **HMOD** | `<key> <value>` | 修改已存在的 Key 对应的 Value | OK / NO EXIST | ERROR |
 | **HDEL** | `<key>` | 从存储引擎中删除指定的 Key-Value | OK / NO EXIST | ERROR |
 | **HEXIST** | `<key>` | 查询指定的 Key 是否存在于系统中 | EXIST / NO EXIST | ERROR |
-| **HSAVE** | (None) | 将当前内存数据持久化到磁盘文件.txt | OK | ERROR |
 
 ### 跳表 （skiplist）
 | 指令  | 参数  | 功能说明  | 成功响应  | 失败响应  |
@@ -100,7 +98,7 @@ if(cli_info->w_pos > 0){
 | **LMOD** | `<key> <value>` | 修改已存在的 Key 对应的 Value | OK / NO EXIST | ERROR |
 | **LDEL** | `<key>` | 从存储引擎中删除指定的 Key-Value | OK / NO EXIST | ERROR |
 | **LEXIST** | `<key>` | 查询指定的 Key 是否存在于系统中 | EXIST / NO EXIST | ERROR |
-| **LSAVE** | (None) | 将当前内存数据持久化到磁盘文件.txt | OK | ERROR |
+
 
 ### 红黑树 （rbtree）
 | 指令  | 参数  | 功能说明  | 成功响应  | 失败响应  |
@@ -110,7 +108,8 @@ if(cli_info->w_pos > 0){
 | **RMOD** | `<key> <value>` | 修改已存在的 Key 对应的 Value | OK / NO EXIST | ERROR |
 | **RDEL** | `<key>` | 从存储引擎中删除指定的 Key-Value | OK / NO EXIST | ERROR |
 | **REXIST** | `<key>` | 查询指定的 Key 是否存在于系统中 | EXIST / NO EXIST | ERROR |
-| **RSAVE** | (None) | 将当前内存数据持久化到磁盘文件.txt | OK | ERROR |
+
+### SAVE指令 将当前内存数据持久化到磁盘文件
 
 
 ## 核心功能模块
@@ -314,7 +313,7 @@ else ret = send(cli_info->fd, cli_info->wbuf, cli_info->w_pos, 0);
     模拟客户端发送GET/RGET/LGET/HGET命令，若kvstore成功响应，打印结果。
 
 ### set_save.c
-    模拟客户端发送GET/RGET/LGET/HGET命令后，再发送SAVE/RSAVE/HSAVE/LSAVE 若kvstore成功响应，打印结果。
+    模拟客户端发送GET/RGET/LGET/HGET命令后，再发送SAVE命令 若kvstore成功响应，打印结果。
 
 ### set_blog.c
     模拟客户端发送大key大value键值对，打印接收结果。
