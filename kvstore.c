@@ -4,6 +4,8 @@
 #include <assert.h>
 #include <stdio.h>
 
+kvs_conf_t global_config = {0};
+
 #if ENABLE_ARRAY
 extern kvs_array_t global_array;
 #endif
@@ -20,9 +22,10 @@ extern kvs_hash_t global_hash;
 extern kvs_skiplist_t global_skiplist;
 #endif
 
-#if ENABLE_MODULE_SYNC
+#define BUFFER_SIZE 1024
+
 extern kvs_slaves global_slaves;
-#endif
+
 
 void *kvs_malloc(size_t size) {
 	return malloc(size);
@@ -536,6 +539,7 @@ void dest_kvengine(void) {
 }
 
 void kvs_init(){
+	kvs_config_init	(&global_config);
 	init_kvengine();
 	kvs_save_init(kvs_protocol);
 	kvs_log_init(kvs_protocol);
@@ -547,26 +551,84 @@ void kvs_deinit(){
 	kvs_slaves_destroy(&global_slaves);
 }
 
+const char * configuation[] = {
+	"ENABLE_MODULE_SYNC", "ENABLE_MODULE_LOG", "ENABLE_MODULE_SAVE",
+	"Master_ip", "Master_port", "Mode", "Port"
+};
+enum{
+	KVS_CONF_START = 0,
 
+	KVS_MODULE_SYC = KVS_CONF_START,
+	KVS_MODULE_LOG,
+	KVS_MODULE_SAVE,
+
+	KVS_MASTER_IP,
+	KVS_MASTER_PORT,
+
+	KVS_MODE,
+	KVS_PORT,
+	
+	KVS_CONF_COUNT
+};
+int kvs_config_init(kvs_conf_t *  conf){
+	if(conf == NULL) return -1;
+	FILE * fp = fopen("./conf/kvstore.conf", "r");;
+	if(fp == NULL) return -2;
+	char  buf[BUFFER_SIZE] = {0};
+
+	int temp = KVS_CONF_START;
+	while(fgets(buf, BUFFER_SIZE, fp) > 0){
+		char * key = strtok(buf, " \n");
+		char * value = strtok(NULL, "= \n");
+		//printf("key: %s, value: %s\n", key, value);
+		if(key == NULL) continue;
+		for(temp = KVS_CONF_START; temp < KVS_CONF_COUNT; temp++){
+			if(strcmp(key, configuation[temp]) == 0) break;
+		}
+		switch (temp)
+		{
+		case KVS_MODULE_SYC:
+			conf->enable_sync = atoi(value);
+			break;
+		case KVS_MODULE_LOG:
+			conf->enable_log = atoi(value);
+			break;
+		case KVS_MODULE_SAVE:
+			conf->enable_save = atoi(value);
+			break;
+		case KVS_MASTER_IP:
+			strncpy(conf->master_ip, value, strlen(value)+ 1);
+			break;	
+		case KVS_MASTER_PORT:
+			conf->master_port = atoi(value);
+			break;	
+		case KVS_MODE:
+			conf->mode = atoi(value);
+			break;
+		case KVS_PORT:
+			conf->port = atoi(value);
+			break;	
+		default:
+			break;
+		}
+	}
+	//printf("IP: %s, port: %d\n", global_config.master_ip, global_config.master_port);
+	fclose(fp);
+}
 
 int main(int argc, char *argv[]) {
 
-	if (argc < 2) return -1;
-
-	int port = atoi(argv[1]);
 
 	kvs_init();
 
+	int port = global_config.port;
 	is_recovering = 0;
-
-#if ENABLE_MODULE_SYNC
-	if(argc == 4){
-		int master_port = atoi(argv[3]);
-		if(0 != kvs_connect_to_master(argv[2], master_port)){
+	
+	if(global_config.mode == 1){
+		if(0 != kvs_connect_to_master(global_config.master_ip, global_config.master_port)){
 			printf("failed to sync\n");
 		}
 	}
-#endif
 
 
 #if (NETWORK_SELECT == NETWORK_REACTOR)

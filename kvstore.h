@@ -22,9 +22,9 @@
 #define ENABLE_HASH			1
 #define ENABLE_SKIPLIST		1
 
-#define ENABLE_MODULE_LOG	0
-#define ENABLE_MODULE_SAVE	0
-#define ENABLE_MODULE_SYNC	1
+
+
+
 
 typedef struct client_info_s{
 	int fd;
@@ -41,7 +41,18 @@ typedef struct client_info_s{
 	int role; // 0:master 1:slave
 }client_info;
 
-
+#define IPV4_MAX_STR_LEN 16
+typedef struct kvs_conf_s
+{
+	int enable_log;
+	int enable_save;
+	int enable_sync;
+	char master_ip[IPV4_MAX_STR_LEN]; // IPV4
+	int master_port;
+	int mode;
+	int port;
+}kvs_conf_t; // kvstore configuration
+int kvs_config_init(kvs_conf_t *  conf);
 
 #include "kvs_sync.h"
 
@@ -205,35 +216,21 @@ int kvs_skiplist_exist(kvs_skiplist_t * inst, char *key);
 void *kvs_malloc(size_t size);
 void kvs_free(void *ptr);
 
-#if ENABLE_MODULE_LOG
 
 
 
-	int kvs_log_init(msg_handler handler);
-	int kvs_log_write(client_info * cli);
-	int kvs_log_close();
-
-#else
-
-	#define kvs_log_init(handler)	(0)
-	#define kvs_log_write(cli)	(0)
-	#define kvs_log_close()	(0)
-#endif
+// Mechanism of AOF****************//
+int kvs_log_init(msg_handler handler);
+int kvs_log_write(client_info * cli);
+int kvs_log_close();
+//*********************************//
 
 
-#if ENABLE_MODULE_SAVE
-	
-
-	int kvs_save_init(msg_handler handler);
-	int kvs_save_write();
-	int kvs_save_read();
-
-#else
-	#define kvs_save_init(handler)	(0)
-	#define kvs_save_write() (0)
-	#define kvs_save_read()	(0)
-	
-#endif
+// Mechanism of SAVE****************//
+int kvs_save_init(msg_handler handler);
+int kvs_save_write();
+int kvs_save_read();
+//*********************************//
 
 
 #endif
