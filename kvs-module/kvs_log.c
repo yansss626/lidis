@@ -4,12 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if ENABLE_MODULE_LOG
+
 #define BUFFER_SIZE 1024
 
 static FILE * fp_log = NULL;
 
 static msg_handler kvs_handler;
+
+extern kvs_conf_t global_config;
 
 // int kvs_log_read(FILE * fp){
 //     if(fp == NULL) return -1;
@@ -56,6 +58,7 @@ static msg_handler kvs_handler;
 // }
 
 int kvs_log_read(FILE * fp){
+    if(global_config.enable_log == 0) return 0;
     if(fp == NULL) return -1;
 
     client_info cli = {0};
@@ -98,6 +101,7 @@ int kvs_log_read(FILE * fp){
 
 
 int kvs_log_init(msg_handler handler){
+    if(global_config.enable_log == 0) return 0;
     kvs_handler = handler;
 
     fp_log = fopen("./kvs-module/kvs_appendonly.aof", "a+");
@@ -112,6 +116,7 @@ int kvs_log_init(msg_handler handler){
 
 
 int kvs_log_write(client_info * cli){
+    if(global_config.enable_log == 0) return 0;
     if (cli == NULL) return -1;
     if (fp_log == NULL) return -2;
     fprintf(fp_log, "%s\r\n", cli->rbuf);
@@ -120,8 +125,8 @@ int kvs_log_write(client_info * cli){
 }
 
 int kvs_log_close(){
+    if(global_config.enable_log == 0) return 0;
     if(fp_log != NULL) fclose(fp_log);
     return 0;
 }
 
-#endif

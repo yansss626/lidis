@@ -9,9 +9,9 @@
 #define BUFFER_SIZE 1024
 
 static msg_handler kvs_handler;
-#if ENABLE_MODULE_SYNC
+
 extern kvs_slaves global_slaves;
-#endif
+
 
 
 int kvs_recv_protocol(client_info * cli_info, int * head_len){

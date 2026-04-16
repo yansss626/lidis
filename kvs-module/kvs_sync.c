@@ -6,13 +6,14 @@
 #include <string.h>
 #include "nty_coroutine.h"
 
-#if ENABLE_MODULE_SYNC
+
 
 #define MSG_LENGTH 32
 #define SYNC_SIZE 32
 #define BUFFER_SIZE 1024
 kvs_slaves global_slaves = {0};
 
+extern kvs_conf_t global_config;
 
 #if ENABLE_ARRAY
 extern kvs_array_t global_array;
@@ -32,7 +33,8 @@ extern kvs_skiplist_t global_skiplist;
 
 int kvs_write_snapshot(FILE * fp);
 
-int kvs_connect_to_master(char * ip, unsigned short port){
+int kvs_connect_to_master(const char * ip, unsigned short port){
+    if(global_config.enable_sync == 0) return 0;
     if(ip == NULL) return -1;
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd < 0) return -2;
@@ -65,6 +67,7 @@ int kvs_connect_to_master(char * ip, unsigned short port){
 }
 
 int kvs_full_sync(kvs_slaves * inst, client_info * cli){
+    if(global_config.enable_sync == 0) return 0;
     if(cli == NULL || inst == NULL) return -1;
     if(inst->table == NULL){
         kvs_slaves_create(inst);
@@ -99,7 +102,7 @@ int kvs_full_sync(kvs_slaves * inst, client_info * cli){
         kvs_free(buffer);
     }
     else{
-        //printf("NO need to sync\n");
+        //printf("No need to sync\n");
     }
     fclose(fp);
     
@@ -186,6 +189,7 @@ int kvs_write_snapshot(FILE * fp){
 
 
 int kvs_incr_sync(kvs_slaves * inst, client_info * cli){
+    if(global_config.enable_sync == 0) return 0;
     if(inst == NULL || inst->table == NULL || cli == NULL) return -1;
 
 
@@ -278,4 +282,3 @@ int kvs_slaves_destroy(kvs_slaves * inst){
     return 0;
 }
 
-#endif
