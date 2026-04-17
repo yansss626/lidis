@@ -13,35 +13,99 @@ static msg_handler kvs_handler;
 extern kvs_slaves global_slaves;
 
 
+/// my protocol: `<length>*<command> <key> <value>`
+// int kvs_recv_my_protocol(client_info * cli_info, int * head_len){
+// 	if(cli_info == NULL) return -1;
+// 	int data_len = 0;
+// 	int protocol_len = 0;
+// 	while(protocol_len < cli_info->r_pos){
+// 		if(cli_info->rbuf[protocol_len] == '*'){
+// 			cli_info->rbuf[protocol_len] = '\0';
+// 			data_len = atoi(cli_info->rbuf);
+// 			cli_info->rbuf[protocol_len] = '*';
+// 			break;
+// 		}
+// 		protocol_len++;
+// 	}
+// 	if(protocol_len == cli_info->r_pos) return 0;
+// 	(*head_len) = protocol_len + 1; // + 1 for length delim: '*' 
+// 	int total_len = protocol_len + data_len + 1;
+// 	if(total_len >= cli_info->r_cap){
+// 		char * temp = (char *)realloc(cli_info->rbuf, total_len + 1);
+// 		if(temp == NULL){
+// 			assert(0);
+// 		}
+// 		cli_info->rbuf = temp;
+// 		cli_info->r_cap = total_len;
+// 	}
 
-int kvs_recv_protocol(client_info * cli_info, int * head_len){
-	if(cli_info == NULL) return -1;
-	int data_len = 0;
-	int protocol_len = 0;
-	while(protocol_len < cli_info->r_pos){
-		if(cli_info->rbuf[protocol_len] == '*'){
-			cli_info->rbuf[protocol_len] = '\0';
-			data_len = atoi(cli_info->rbuf);
-			cli_info->rbuf[protocol_len] = '*';
-			break;
-		}
-		protocol_len++;
-	}
-	if(protocol_len == cli_info->r_pos) return 0;
-	(*head_len) = protocol_len + 1; // + 1 for length delim: '*' 
-	int total_len = protocol_len + data_len + 1;
-	if(total_len >= cli_info->r_cap){
-		char * temp = (char *)realloc(cli_info->rbuf, total_len + 1);
-		if(temp == NULL){
-			assert(0);
-		}
-		cli_info->rbuf = temp;
-		cli_info->r_cap = total_len;
-	}
+// 	return total_len;
 
-	return total_len;
+// }
+//********************************************
+
+
+/// redis serialization protocol: resp ************************
+int kvs_recv_resp(client_info * cli_info, int * head_len){
+	if(cli_info == NULL || head_len == NULL) return -1;
+
+
+    int pos = 0;  // pointr position
+    int argc = 0; //// *<argc>\r\n.....
+
+    int pc_pos = 0; ////Redis Serialiation Protocol Characters: '*', '$'
+    int es_len = 2; //end string: \r\n
+
+    if(cli_info->rbuf[pos] == '*'){
+        pc_pos = pos;
+        ++pos;
+    }
+    else return -2;
+            
+            
+    while(pos < cli_info->r_pos){
+        if(cli_info->rbuf[pos] == '\n' && cli_info->rbuf[pos - 1] == '\r'){
+            argc = atoi(cli_info->rbuf + pc_pos + 1);
+            (*head_len) = pos + 1;
+
+            break;
+        }
+        ++pos;
+    }            
+    
+
+    if(pos >= cli_info->r_pos)  return 0;
+    
+
+    int bs_len = 0; // bulk string length
+    for(int i = 0; i < argc; i++){
+        ++pos; // pos for "$"
+        if(pos > cli_info->r_pos) return 0;
+        if(cli_info->rbuf[pos] != '$') return -2;
+
+        pc_pos = pos;
+        while(pos < cli_info->r_pos){
+            if(cli_info->rbuf[pos] == '\n' && cli_info->rbuf[pos - 1] == '\r'){
+                bs_len = atoi(cli_info->rbuf + pc_pos + 1);
+				pos += bs_len + es_len;
+                break;
+            }
+            ++pos;
+        }               
+        
+        if(pos >= cli_info->r_pos) return 0;
+         
+    }
+
+    return pos + 1;
 
 }
+//********************************************
+
+int kvs_recv_protocol(client_info * cli_info, int * head_len){
+	return kvs_recv_resp(cli_info, head_len);
+}
+
 
 client_info * client_info_init(int fd){
 	client_info * cli_info = (client_info *)malloc(sizeof(client_info));
@@ -72,39 +136,22 @@ client_info * client_info_init(int fd){
 	
 }
 
-// void server_reader(void *arg) {
-// 	int fd = *(int *)arg;
-// 	int ret = 0;
 
- 
-// 	while (1) {
-		
-// 		char buf[1024] = {0};
-// 		ret = recv(fd, buf, 1024, 0);
-// 		char * buf = kvs_client_server_protocol(fd);
-// 		if (ret > 0) {
-			
-// 			char response[BUFFER_SIZE] = {0};
-// 			int slen = kvs_handler(buf, strlen(buf), response);
-
-// 			ret = send(fd, response, slen, 0);
-// 			if (ret == -1) {
-// 				close(fd);
-// 				break;
-// 			}
-// 		} else if (ret == 0) {	
-// 			close(fd);
-// 			break;
-// 		}
-
-// 	}
-// }
 
 
 void server_reader(void *arg) {
 		client_info * cli_info = (client_info *)arg;
 		int ret = 0;
 		while(1){
+			if(cli_info->r_pos >= cli_info->r_cap) {
+				char * temp = (char *)realloc(cli_info->rbuf, 2 * cli_info->r_cap + 1);
+                if(temp == NULL) {
+                    perror("realloc error");
+                    break;
+                }
+                cli_info->rbuf = temp;
+                cli_info->r_cap *= 2;		
+			}
 			ret = recv(cli_info->fd, cli_info->rbuf + cli_info->r_pos, cli_info->r_cap - cli_info->r_pos, 0);
 
 			if (ret <= 0) {	
@@ -118,47 +165,56 @@ void server_reader(void *arg) {
 			while(cli_info->r_pos > 0) {
 				
 				int head_len = 0;
+
 				int total_len = kvs_recv_protocol(cli_info, &head_len);
-				if(head_len == 0 || cli_info->r_pos < total_len) break;  // TCP Segmentation occur, continue to
-				
+				if(total_len == 0) break;
+				if(total_len < 0){
+					if(cli_info->w_cap - cli_info->w_pos < 22){
+							char * temp = (char *)realloc(cli_info->wbuf, cli_info->w_cap + 23);
+							if(temp == NULL) {
+								perror("realloc error");
+								goto cleanup;
+							}
+							cli_info->wbuf = temp;
+							cli_info->w_cap += 22;			
+					}
+					int len = sprintf(cli_info->wbuf + cli_info->w_pos, "-ERR protocol error\r\n");
+					send(cli_info->fd, cli_info->wbuf + cli_info->w_pos, len, 0);
+					goto cleanup;
+				}
+
 				cli_info->cmd_tl = total_len;
 				cli_info->cmd_hl = head_len;
 
 
-				// memmove(cli_info->rbuf, cli_info->rbuf + head_len, cli_info->r_pos - head_len);
-				// char temp = cli_info->rbuf[total_len - head_len];
-				// cli_info->rbuf[total_len - head_len] = '\0';
+
 				char temp = cli_info->rbuf[total_len];
 				cli_info->rbuf[total_len] = '\0';
 				//printf("%s\n", cli_info->rbuf);
 
 				int slen = kvs_handler(cli_info);
 				cli_info->w_pos += slen;
-				//cli_info->rbuf[total_len - head_len] = temp;
+
 				cli_info->rbuf[total_len] = temp;
-				if(slen < 0) assert(0);
+				if(slen < 0) goto cleanup;
 				cli_info->r_pos -= total_len;
 				if(cli_info->r_pos > 0){
 					int pure_len = total_len - head_len;
-					//memmove(cli_info->rbuf, cli_info->rbuf + pure_len, cli_info->r_pos);
 					memmove(cli_info->rbuf, cli_info->rbuf + total_len, cli_info->r_pos);
 					
 				}
-				
-				// else if(cli_info->r_pos == 0){
-				// 	if(cli_info->role == 1) cli_info->w_pos = 0; // slave doesn't reply
-				// 	ret = send(cli_info->fd, cli_info->wbuf, cli_info->w_pos, 0);
-				// 	cli_info->w_pos = 0;
-				// }
+
 				
 			}
 			if(cli_info->w_pos > 0){
 				if(cli_info->role == 1) cli_info->w_pos = 0; // slave doesn't reply
 				else ret = send(cli_info->fd, cli_info->wbuf, cli_info->w_pos, 0);
+				//printf("sbuf: %s\n", cli_info->wbuf);
 				cli_info->w_pos = 0;
 			}
 			
 		}
+		cleanup:
 		close(cli_info->fd);
 		if(cli_info->rbuf != NULL) free(cli_info->rbuf);
 		if(cli_info->wbuf != NULL) free(cli_info->wbuf);
@@ -193,7 +249,6 @@ void server(void *arg) {
 
 
 		nty_coroutine *read_co;
-		//nty_coroutine_create(&read_co, server_reader, &cli_fd);
 		nty_coroutine_create(&read_co, server_reader, cli_info);
 
 	}
@@ -206,7 +261,7 @@ void server(void *arg) {
 
 int ntyco_start(unsigned short port, msg_handler handler) {
 
-	//int port = atoi(argv[1]);
+
 	kvs_handler = handler;
 
 	

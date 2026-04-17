@@ -41,7 +41,7 @@ const char *command[] = {
 	"RSET", "RGET", "RDEL", "RMOD", "REXIST",
 	"HSET", "HGET", "HDEL", "HMOD", "HEXIST",
 	"LSET", "LGET", "LDEL", "LMOD", "LEXIST",
-	"SAVE", "SYNC", 
+	"SAVE", "SYNC", "COMMAND",
 };
 
 enum {
@@ -78,82 +78,430 @@ enum {
 	KVS_CMD_SAVE,
 	KVS_CMD_SYNC,
 
+	KVS_CMD_COMMAND,
+
 	KVS_CMD_COUNT,
 };
 
-int is_recovering = 1;
+int is_recovering = 1; // global sign for kvstore initilization. 1 indicates that kvstore is recovering, 0 indicates the opposite.
 
 // const char *response[] = {
 
 // };
 
 
+
+
+/// my protocol: `<length>*<command> <key> <value>`
+
 // int kvs_split_token(char *msg, char *tokens[]) {
 
 // 	if (msg == NULL || tokens == NULL) return -1;
 
 // 	int idx = 0;
-// 	char *token = strtok(msg, " ");
+// 	int pos = 0;
+
+// 	tokens[idx++] = msg + pos;
+// // ********* 获取第一个token***********
+// 	while(msg[pos] != ' ' && msg[pos] != '\0') pos++;
+// 	if(msg[pos] == '\0') return idx;
 	
-// 	while (token != NULL) {
-// 		//printf("idx: %d, %s\n", idx, token);
-		
-// 		tokens[idx ++] = token;
-// 		token = strtok(NULL, " ");
+// 	msg[pos++] = '\0';
+// // ***********************************
+
+
+// 	while(msg[pos] == ' ')pos++;
+// 	if(msg[pos] == '\0') return 0;
+
+// // ********* 获取第二个token***********
+// 	tokens[idx++] = msg + pos;
+
+// 	while(msg[pos] != ' ' && msg[pos] != '\0') pos++;
+//     if(msg[pos] == '\0')  {
+// 		// for(int i = 0; i < idx; i++){
+// 		// 	printf("%s\n", tokens[i]);
+// 		// }		
+// 		return idx;
 // 	}
+//     msg[pos++] = '\0';
+// // ***********************************
+
+// // ********* 获取第三个token***********
+// 	while(msg[pos] == ' ') pos++;
+// 	tokens[idx++] = msg + pos;
+// // ***********************************
+
+// 	// for(int i = 0; i < idx; i++){
+// 	// 	printf("%s\n", tokens[i]);
+// 	// }
 
 // 	return idx;
 // }
+//********************************************
 
 
+/// redis serialization protocol: resp ************************
 int kvs_split_token(char *msg, char *tokens[]) {
 
-	if (msg == NULL || tokens == NULL) return -1;
+    int pos = 0;
+    int es_len = 2; // end string: \r\n
+    int bs_len = 0; // bulk string length
+    int idx = 0;
+    
+    while(msg[pos] != '\0'){   
+        if(msg[pos] == '$') {
+            ++pos;
+            bs_len = atoi(msg + pos);
+            while(msg[pos] != '\r'){
+                pos++;
+            }
+            pos += es_len;
+            tokens[idx++] = msg + pos;
+            msg[pos + bs_len] = '\0';
+            pos += bs_len + es_len;
+        }
+        
+    }
+    return idx;
 
-	int idx = 0;
-	int pos = 0;
-
-	tokens[idx++] = msg + pos;
-// ********* 获取第一个token***********
-	while(msg[pos] != ' ' && msg[pos] != '\0') pos++;
-	if(msg[pos] == '\0') return idx;
-	
-	msg[pos++] = '\0';
-// ***********************************
-
-
-	while(msg[pos] == ' ')pos++;
-	if(msg[pos] == '\0') return 0;
-
-// ********* 获取第二个token***********
-	tokens[idx++] = msg + pos;
-
-	while(msg[pos] != ' ' && msg[pos] != '\0') pos++;
-    if(msg[pos] == '\0')  {
-		// for(int i = 0; i < idx; i++){
-		// 	printf("%s\n", tokens[i]);
-		// }		
-		return idx;
-	}
-    msg[pos++] = '\0';
-// ***********************************
-
-// ********* 获取第三个token***********
-	while(msg[pos] == ' ') pos++;
-	tokens[idx++] = msg + pos;
-// ***********************************
-
-	// for(int i = 0; i < idx; i++){
-	// 	printf("%s\n", tokens[i]);
-	// }
-
-	return idx;
 }
+
+//********************************************
+
+
+
 
 // SET Key Value
 // tokens[0] : SET
 // tokens[1] : Key
 // tokens[2] : Value
+// protocol: my protocol
+// int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
+
+// 	if (tokens[0] == NULL || count == 0 || cli == NULL) return -1;
+// 	int cmd = KVS_CMD_START;
+// 	for (cmd = KVS_CMD_START;cmd < KVS_CMD_COUNT;cmd ++) {
+// 		if (strcmp(tokens[0], command[cmd]) == 0) {
+// 			break;
+// 		} 
+// 	}
+// 	//printf("tokens[0]: %s\n", tokens[0]);
+// 	int length = 0;
+// 	int ret = 0;
+// 	char *key = tokens[1];
+// 	char *value = tokens[2];
+// 	int is_write_success = 0;
+// 	if(cli->w_cap - cli->w_pos < 16){
+// 			char * temp = (char *)realloc(cli->wbuf, cli->w_cap * 2);
+// 			if(temp == NULL) {
+// 				perror("realloc error");
+// 				return -1;
+// 			}
+// 			cli->wbuf = temp;
+// 			cli->w_cap *= 2;			
+// 	}
+	
+// 	switch(cmd) {
+// #if ENABLE_ARRAY
+// 	case KVS_CMD_SET:
+// 		ret = kvs_array_set(&global_array ,key, value);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+// 		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+// 		} 
+		
+// 		break;
+// 	case KVS_CMD_GET: {
+// 		char *result = kvs_array_get(&global_array, key);		
+// 		if (result == NULL) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		} else {
+// 			int needed = strlen(result) + 2; // 2 for "\r\n"
+// 			if(needed > cli->w_cap - cli->w_pos){  
+// 				char * temp = (char *)realloc(cli->wbuf, needed + cli->w_cap + 1);
+// 				if(temp == NULL) {
+// 					perror("realloc error");
+// 					return -1;
+// 				}
+// 				cli->wbuf = temp;
+// 				cli->w_cap += needed;
+// 			}
+// 			length = sprintf(cli->wbuf + cli->w_pos, "%s\r\n", result);
+// 		}
+// 		break;
+// 	}
+// 	case KVS_CMD_DEL:
+// 		ret = kvs_array_del(&global_array ,key);		
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+//  		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// 	case KVS_CMD_MOD:
+// 		ret = kvs_array_mod(&global_array ,key, value);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+//  		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// 	case KVS_CMD_EXIST:
+// 		ret = kvs_array_exist(&global_array ,key);
+// 		if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// #endif
+// 	// rbtree
+// #if ENABLE_RBTREE
+// 	case KVS_CMD_RSET:
+// 		ret = kvs_rbtree_set(&global_rbtree ,key, value);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+// 		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+// 		} 
+		
+// 		break;
+// 	case KVS_CMD_RGET: {
+// 		char *result = kvs_rbtree_get(&global_rbtree, key);
+// 		if (result == NULL) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		} else {
+// 			int needed = strlen(result) + 2; // 2 for "\r\n"
+// 			if(needed > cli->w_cap - cli->w_pos){  
+// 				char * temp = (char *)realloc(cli->wbuf, needed + cli->w_cap + 1);
+// 				if(temp == NULL) {
+// 					perror("realloc error");
+// 					return -1;
+// 				}
+// 				cli->wbuf = temp;
+// 				cli->w_cap += needed;
+// 			}
+// 			length = sprintf(cli->wbuf + cli->w_pos, "%s\r\n", result);
+// 		}
+// 		break;
+// 	}
+// 	case KVS_CMD_RDEL:
+// 		ret = kvs_rbtree_del(&global_rbtree ,key);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+//  		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// 	case KVS_CMD_RMOD:
+// 		ret = kvs_rbtree_mod(&global_rbtree ,key, value);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+//  		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// 	case KVS_CMD_REXIST:
+// 		ret = kvs_rbtree_exist(&global_rbtree ,key);
+// 		if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// #endif
+// 	//hash
+// #if ENABLE_HASH
+// 	case KVS_CMD_HSET:
+// 		ret = kvs_hash_set(&global_hash ,key, value);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+// 		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+// 		} 
+		
+// 		break;
+// 	case KVS_CMD_HGET: {
+// 		char *result = kvs_hash_get(&global_hash, key);
+// 		if (result == NULL) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		} else {
+// 			int needed = strlen(result) + 2; // 2 for "\r\n"
+// 			if(needed > cli->w_cap - cli->w_pos){  
+// 				char * temp = (char *)realloc(cli->wbuf, needed + cli->w_cap + 1);
+// 				if(temp == NULL) {
+// 					perror("realloc error");
+// 					return -1;
+// 				}
+// 				cli->wbuf = temp;
+// 				cli->w_cap += needed;
+// 			}
+// 			length = sprintf(cli->wbuf + cli->w_pos, "%s\r\n", result);
+// 		}
+// 		break;
+// 	}
+// 	case KVS_CMD_HDEL:
+// 		ret = kvs_hash_del(&global_hash ,key);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+//  		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// 	case KVS_CMD_HMOD:
+// 		ret = kvs_hash_mod(&global_hash ,key, value);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+//  		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// 	case KVS_CMD_HEXIST:
+// 		ret = kvs_hash_exist(&global_hash ,key);
+// 		if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// #endif
+// 	//skiplist
+// #if ENABLE_SKIPLIST
+// 	case KVS_CMD_LSET:
+// 		ret = kvs_skiplist_set(&global_skiplist ,key, value);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+// 		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+// 		} 
+		
+// 		break;
+// 	case KVS_CMD_LGET: {
+// 		char *result = kvs_skiplist_get(&global_skiplist, key);
+// 		if (result == NULL) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		} else {
+// 			int needed = strlen(result) + 2; // 2 for "\r\n"
+// 			if(needed > cli->w_cap - cli->w_pos){  
+// 				char * temp = (char *)realloc(cli->wbuf, needed + cli->w_cap + 1);
+// 				if(temp == NULL) {
+// 					perror("realloc error");
+// 					return -1;
+// 				}
+// 				cli->wbuf = temp;
+// 				cli->w_cap += needed;
+// 			}
+// 			length = sprintf(cli->wbuf + cli->w_pos, "%s\r\n", result);
+// 		}
+// 		break;
+// 	}
+// 	case KVS_CMD_LDEL:
+// 		ret = kvs_skiplist_del(&global_skiplist ,key);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+//  		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// 	case KVS_CMD_LMOD:
+// 		ret = kvs_skiplist_mod(&global_skiplist ,key, value);
+// 		if (ret < 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+//  		} else if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// 	case KVS_CMD_LEXIST:
+// 		ret = kvs_skiplist_exist(&global_skiplist ,key);
+// 		if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+// 		}
+// 		break;
+// #endif
+// 	case KVS_CMD_SAVE:
+// 		ret = kvs_save_write();
+// 		if (ret == 0) {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+// 			is_write_success = 1;
+// 		} else {
+// 			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+// 		}
+// 		break;
+// 	case KVS_CMD_SYNC:
+// 		kvs_full_sync(&global_slaves, cli);
+// 		length = 0;
+// 		break;
+
+
+// 	default: 
+// 		assert(0);
+// 	}
+
+// 	if(is_write_success == 1) {
+// 		for(int i = 0; i < count - 1; i++){
+// 			int pos = strlen(tokens[i]);
+// 			(tokens[i])[pos] = ' ';
+// 		} // repair cli->rbuf due to kvs_split_token
+// 		if(is_recovering == 0){
+// 			kvs_log_write(cli);
+// 		} 
+// 		kvs_incr_sync(&global_slaves, cli);
+// 	}
+// 	return length;
+// }
+
+enum kvs_reply_t{// enum used for client reply
+	REPLY_START,
+	REPLY_OK,
+	REPLY_ERROR,
+	REPLY_EXIST,
+	REPLY_NO_EXIST,
+	REPLY_VALUE,
+	REPLY_NONE,
+	REPLY_COMMAND,
+
+}; 
+
+
 
 int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 
@@ -169,8 +517,11 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	int ret = 0;
 	char *key = tokens[1];
 	char *value = tokens[2];
+	//printf("key: %s, value: %s \n", tokens[1], tokens[2]);
+	enum kvs_reply_t reply = REPLY_START;
+	char * result = NULL;
 	int is_write_success = 0;
-	if(cli->w_cap - cli->w_pos < 16){
+	if(cli->w_cap - cli->w_pos < 32){
 			char * temp = (char *)realloc(cli->wbuf, cli->w_cap * 2);
 			if(temp == NULL) {
 				perror("realloc error");
@@ -185,62 +536,52 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	case KVS_CMD_SET:
 		ret = kvs_array_set(&global_array ,key, value);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+			reply = REPLY_ERROR;
 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+			reply = REPLY_EXIST;
 		} 
 		
 		break;
 	case KVS_CMD_GET: {
-		char *result = kvs_array_get(&global_array, key);		
+		result = kvs_array_get(&global_array, key);		
 		if (result == NULL) {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+			reply = REPLY_NO_EXIST;
 		} else {
-			int len = strlen(result);
-			if(len > cli->w_cap - cli->w_pos - 2){  // 2 for "\r\n"
-				char * temp = (char *)realloc(cli->wbuf, len + 3);
-				if(temp == NULL) {
-					perror("realloc error");
-					return -1;
-				}
-				cli->wbuf = temp;
-				cli->w_cap = len + 2;
-			}
-			length = sprintf(cli->wbuf + cli->w_pos, "%s\r\n", result);
+			reply = REPLY_VALUE;
 		}
 		break;
 	}
 	case KVS_CMD_DEL:
 		ret = kvs_array_del(&global_array ,key);		
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
- 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_ERROR;
+		} else if (ret == 0) {
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
-		}
+			reply = REPLY_NO_EXIST;
+		} 
 		break;
 	case KVS_CMD_MOD:
 		ret = kvs_array_mod(&global_array ,key, value);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
- 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_ERROR;
+		} else if (ret == 0) {
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
-		}
+			reply = REPLY_NO_EXIST;
+		} 
 		break;
 	case KVS_CMD_EXIST:
 		ret = kvs_array_exist(&global_array ,key);
 		if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+			reply = REPLY_EXIST;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+			reply = REPLY_NO_EXIST;
 		}
 		break;
 #endif
@@ -249,62 +590,52 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	case KVS_CMD_RSET:
 		ret = kvs_rbtree_set(&global_rbtree ,key, value);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+			reply = REPLY_ERROR;
 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+			reply = REPLY_EXIST;
 		} 
 		
 		break;
 	case KVS_CMD_RGET: {
-		char *result = kvs_rbtree_get(&global_rbtree, key);
+		result = kvs_rbtree_get(&global_rbtree, key);
 		if (result == NULL) {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+			reply = REPLY_NO_EXIST;
 		} else {
-			int len = strlen(result);
-			if(len > cli->w_cap - cli->w_pos - 2){  // 2 for "\r\n"
-				char * temp = (char *)realloc(cli->wbuf, len + 3);
-				if(temp == NULL) {
-					perror("realloc error");
-					return -1;
-				}
-				cli->wbuf = temp;
-				cli->w_cap = len + 2;
-			}
-			length = sprintf(cli->wbuf + cli->w_pos, "%s\r\n", result);
+			reply = REPLY_VALUE;
 		}
 		break;
 	}
 	case KVS_CMD_RDEL:
 		ret = kvs_rbtree_del(&global_rbtree ,key);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
- 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_ERROR;
+		} else if (ret == 0) {
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
-		}
+			reply = REPLY_NO_EXIST;
+		} 
 		break;
 	case KVS_CMD_RMOD:
 		ret = kvs_rbtree_mod(&global_rbtree ,key, value);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
- 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_ERROR;
+		} else if (ret == 0) {
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
-		}
+			reply = REPLY_NO_EXIST;
+		} 
 		break;
 	case KVS_CMD_REXIST:
 		ret = kvs_rbtree_exist(&global_rbtree ,key);
 		if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+			reply = REPLY_EXIST;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+			reply = REPLY_NO_EXIST;
 		}
 		break;
 #endif
@@ -313,62 +644,52 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	case KVS_CMD_HSET:
 		ret = kvs_hash_set(&global_hash ,key, value);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+			reply = REPLY_ERROR;
 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+			reply = REPLY_EXIST;
 		} 
 		
 		break;
 	case KVS_CMD_HGET: {
-		char *result = kvs_hash_get(&global_hash, key);
+		result = kvs_hash_get(&global_hash, key);
 		if (result == NULL) {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+			reply = REPLY_NO_EXIST;
 		} else {
-			int len = strlen(result);
-			if(len > cli->w_cap - cli->w_pos - 2){  // 2 for "\r\n"
-				char * temp = (char *)realloc(cli->wbuf, len + 3);
-				if(temp == NULL) {
-					perror("realloc error");
-					return -1;
-				}
-				cli->wbuf = temp;
-				cli->w_cap = len + 2;
-			}
-			length = sprintf(cli->wbuf + cli->w_pos, "%s\r\n", result);
+			reply = REPLY_VALUE;
 		}
 		break;
 	}
 	case KVS_CMD_HDEL:
 		ret = kvs_hash_del(&global_hash ,key);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
- 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_ERROR;
+		} else if (ret == 0) {
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
-		}
+			reply = REPLY_NO_EXIST;
+		} 
 		break;
 	case KVS_CMD_HMOD:
 		ret = kvs_hash_mod(&global_hash ,key, value);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
- 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_ERROR;
+		} else if (ret == 0) {
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
-		}
+			reply = REPLY_NO_EXIST;
+		} 
 		break;
 	case KVS_CMD_HEXIST:
 		ret = kvs_hash_exist(&global_hash ,key);
 		if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+			reply = REPLY_EXIST;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+			reply = REPLY_NO_EXIST;
 		}
 		break;
 #endif
@@ -377,72 +698,62 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	case KVS_CMD_LSET:
 		ret = kvs_skiplist_set(&global_skiplist ,key, value);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+			reply = REPLY_ERROR;
 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+			reply = REPLY_EXIST;
 		} 
 		
 		break;
 	case KVS_CMD_LGET: {
-		char *result = kvs_skiplist_get(&global_skiplist, key);
+		result = kvs_skiplist_get(&global_skiplist, key);
 		if (result == NULL) {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+			reply = REPLY_NO_EXIST;
 		} else {
-			int len = strlen(result);
-			if(len > cli->w_cap - cli->w_pos - 2){  // 2 for "\r\n"
-				char * temp = (char *)realloc(cli->wbuf, len + 3);
-				if(temp == NULL) {
-					perror("realloc error");
-					return -1;
-				}
-				cli->wbuf = temp;
-				cli->w_cap = len + 2;
-			}
-			length = sprintf(cli->wbuf + cli->w_pos, "%s\r\n", result);
+			reply = REPLY_VALUE;
 		}
 		break;
 	}
 	case KVS_CMD_LDEL:
 		ret = kvs_skiplist_del(&global_skiplist ,key);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
- 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_ERROR;
+		} else if (ret == 0) {
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
-		}
+			reply = REPLY_NO_EXIST;
+		} 
 		break;
 	case KVS_CMD_LMOD:
 		ret = kvs_skiplist_mod(&global_skiplist ,key, value);
 		if (ret < 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
- 		} else if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_ERROR;
+		} else if (ret == 0) {
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
-		}
+			reply = REPLY_NO_EXIST;
+		} 
 		break;
 	case KVS_CMD_LEXIST:
 		ret = kvs_skiplist_exist(&global_skiplist ,key);
 		if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "EXIST\r\n");
+			reply = REPLY_EXIST;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "NO EXIST\r\n");
+			reply = REPLY_NO_EXIST;
 		}
 		break;
 #endif
 	case KVS_CMD_SAVE:
 		ret = kvs_save_write();
 		if (ret == 0) {
-			length = sprintf(cli->wbuf + cli->w_pos, "OK\r\n");
+			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
-			length = sprintf(cli->wbuf + cli->w_pos, "ERROR\r\n");
+			reply = REPLY_ERROR;
 		}
 		break;
 	case KVS_CMD_SYNC:
@@ -450,16 +761,60 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		length = 0;
 		break;
 
-
+	case KVS_CMD_COMMAND:
+		reply = REPLY_COMMAND;
+		break;
 	default: 
-		assert(0);
+		reply = REPLY_NONE;
+		//assert(0);
 	}
 
+	switch (reply)
+	{
+	case REPLY_OK:
+		length = sprintf(cli->wbuf + cli->w_pos, "+OK\r\n");
+		break;
+	case REPLY_ERROR:
+		length = sprintf(cli->wbuf + cli->w_pos, "-ERR message\r\n");
+		break;	
+	case REPLY_EXIST:
+		length = sprintf(cli->wbuf + cli->w_pos, ":1\r\n");
+		break;
+	case REPLY_NO_EXIST:
+		length = sprintf(cli->wbuf + cli->w_pos, "$-1\r\n");
+		break;
+
+	case REPLY_VALUE:{
+		int rlen = strlen(result);// $len\r\nvalue\r\n
+		int needed = rlen + 15; // "$" + 最多10位数字 + "\r\n" + value + "\r\n"
+		if(needed > cli->w_cap - cli->w_pos){  
+			char * temp = (char *)realloc(cli->wbuf, cli->w_cap + needed + 1);
+			if(temp == NULL) {
+				perror("realloc error");
+				return -1;
+			}
+			cli->wbuf = temp;
+			cli->w_cap += needed;
+		}
+		length = sprintf(cli->wbuf + cli->w_pos, "$%d\r\n%s\r\n", rlen ,result);
+		break;
+	}
+	case REPLY_NONE:
+		length = sprintf(cli->wbuf + cli->w_pos, "-ERR no such command\r\n");
+		break;
+	case REPLY_COMMAND:
+		length = sprintf(cli->wbuf + cli->w_pos, "*0\r\n");
+		break;
+	default:
+		break;
+	}
+
+
 	if(is_write_success == 1) {
-		for(int i = 0; i < count - 1; i++){
-			int pos = strlen(tokens[i]);
-			(tokens[i])[pos] = ' ';
-		} // repair cli->rbuf due to kvs_split_token
+			for(int i = 0; i < count; i++){
+				int pos = strlen(tokens[i]);
+				(tokens[i])[pos] = '\r';
+			} // repair cli->rbuf due to kvs_split_token
 		if(is_recovering == 0){
 			kvs_log_write(cli);
 		} 
