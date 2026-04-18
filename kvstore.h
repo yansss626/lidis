@@ -23,7 +23,7 @@
 #define ENABLE_SKIPLIST		1
 
 
-
+int resp_parse_bulk_size(const char * buf, size_t buf_size, int * head_len);
 
 
 typedef struct client_info_s{

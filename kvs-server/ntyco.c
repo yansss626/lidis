@@ -13,41 +13,10 @@ static msg_handler kvs_handler;
 extern kvs_slaves global_slaves;
 
 
-/// my protocol: `<length>*<command> <key> <value>`
-// int kvs_recv_my_protocol(client_info * cli_info, int * head_len){
-// 	if(cli_info == NULL) return -1;
-// 	int data_len = 0;
-// 	int protocol_len = 0;
-// 	while(protocol_len < cli_info->r_pos){
-// 		if(cli_info->rbuf[protocol_len] == '*'){
-// 			cli_info->rbuf[protocol_len] = '\0';
-// 			data_len = atoi(cli_info->rbuf);
-// 			cli_info->rbuf[protocol_len] = '*';
-// 			break;
-// 		}
-// 		protocol_len++;
-// 	}
-// 	if(protocol_len == cli_info->r_pos) return 0;
-// 	(*head_len) = protocol_len + 1; // + 1 for length delim: '*' 
-// 	int total_len = protocol_len + data_len + 1;
-// 	if(total_len >= cli_info->r_cap){
-// 		char * temp = (char *)realloc(cli_info->rbuf, total_len + 1);
-// 		if(temp == NULL){
-// 			assert(0);
-// 		}
-// 		cli_info->rbuf = temp;
-// 		cli_info->r_cap = total_len;
-// 	}
-
-// 	return total_len;
-
-// }
-//********************************************
-
 
 /// redis serialization protocol: resp ************************
-int kvs_recv_resp(client_info * cli_info, int * head_len){
-	if(cli_info == NULL || head_len == NULL) return -1;
+int resp_parse_bulk_size(const char * buf, size_t buf_size, int * head_len){
+	if(buf == NULL || head_len == NULL || buf_size <= 0) return -1;
 
 
     int pos = 0;  // pointr position
@@ -56,16 +25,16 @@ int kvs_recv_resp(client_info * cli_info, int * head_len){
     int pc_pos = 0; ////Redis Serialiation Protocol Characters: '*', '$'
     int es_len = 2; //end string: \r\n
 
-    if(cli_info->rbuf[pos] == '*'){
+    if(buf[pos] == '*'){
         pc_pos = pos;
         ++pos;
     }
     else return -2;
             
             
-    while(pos < cli_info->r_pos){
-        if(cli_info->rbuf[pos] == '\n' && cli_info->rbuf[pos - 1] == '\r'){
-            argc = atoi(cli_info->rbuf + pc_pos + 1);
+    while(pos < buf_size){
+        if(buf[pos] == '\n' && buf[pos - 1] == '\r'){
+            argc = atoi(buf + pc_pos + 1);
             (*head_len) = pos + 1;
 
             break;
@@ -74,26 +43,26 @@ int kvs_recv_resp(client_info * cli_info, int * head_len){
     }            
     
 
-    if(pos >= cli_info->r_pos)  return 0;
+    if(pos >= buf_size)  return 0;
     
 
     int bs_len = 0; // bulk string length
     for(int i = 0; i < argc; i++){
         ++pos; // pos for "$"
-        if(pos > cli_info->r_pos) return 0;
-        if(cli_info->rbuf[pos] != '$') return -2;
+        if(pos > buf_size) return 0;
+        if(buf[pos] != '$') return -2;
 
         pc_pos = pos;
-        while(pos < cli_info->r_pos){
-            if(cli_info->rbuf[pos] == '\n' && cli_info->rbuf[pos - 1] == '\r'){
-                bs_len = atoi(cli_info->rbuf + pc_pos + 1);
+        while(pos < buf_size){
+            if(buf[pos] == '\n' && buf[pos - 1] == '\r'){
+                bs_len = atoi(buf + pc_pos + 1);
 				pos += bs_len + es_len;
                 break;
             }
             ++pos;
         }               
         
-        if(pos >= cli_info->r_pos) return 0;
+        if(pos >= buf_size) return 0;
          
     }
 
@@ -103,7 +72,7 @@ int kvs_recv_resp(client_info * cli_info, int * head_len){
 //********************************************
 
 int kvs_recv_protocol(client_info * cli_info, int * head_len){
-	return kvs_recv_resp(cli_info, head_len);
+	return resp_parse_bulk_size(cli_info->rbuf, cli_info->r_pos, head_len);
 }
 
 
