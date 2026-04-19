@@ -477,7 +477,7 @@ int kvs_protocol(client_info * cli) {  //
 	char *tokens[KVS_MAX_TOKENS] = {0};
 
 	int count = kvs_split_token(cli->rbuf + cli->cmd_hl, tokens);
-	if (count == -1) return -1;
+	if (count < 0) return -1;
 
 	//memcpy(response, msg, length);
 
