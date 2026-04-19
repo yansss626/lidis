@@ -19,7 +19,7 @@ int resp_parse_bulk_size(const char * buf, size_t buf_size, int * head_len){
 	if(buf == NULL || head_len == NULL || buf_size <= 0) return -1;
 
 
-    int pos = 0;  // pointr position
+    size_t pos = 0;  // pointr position
     int argc = 0; //// *<argc>\r\n.....
 
     int pc_pos = 0; ////Redis Serialiation Protocol Characters: '*', '$'
@@ -168,7 +168,6 @@ void server_reader(void *arg) {
 				if(slen < 0) goto cleanup;
 				cli_info->r_pos -= total_len;
 				if(cli_info->r_pos > 0){
-					int pure_len = total_len - head_len;
 					memmove(cli_info->rbuf, cli_info->rbuf + total_len, cli_info->r_pos);
 					
 				}
@@ -238,6 +237,8 @@ int ntyco_start(unsigned short port, msg_handler handler) {
 	nty_coroutine_create(&co, server, &port);
 
 	nty_schedule_run();
+
+	return 0;
 
 }
 

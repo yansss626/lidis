@@ -566,7 +566,7 @@ int kvs_config_init(kvs_conf_t *  conf){
 	char  buf[BUFFER_SIZE] = {0};
 
 	enum kvs_conf_t temp = KVS_CONF_START;
-	while(fgets(buf, BUFFER_SIZE, fp) > 0){
+	while(fgets(buf, BUFFER_SIZE, fp) != NULL){
 		char * key = strtok(buf, " \n");
 		char * value = strtok(NULL, "= \n");
 		//printf("key: %s, value: %s\n", key, value);
@@ -603,6 +603,7 @@ int kvs_config_init(kvs_conf_t *  conf){
 	}
 	//printf("IP: %s, port: %d\n", global_config.master_ip, global_config.master_port);
 	fclose(fp);
+	return 0;
 }
 
 int main(int argc, char *argv[]) {
