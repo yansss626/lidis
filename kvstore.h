@@ -5,7 +5,7 @@
 #define __KV_STORE_H__
 
 #include <stddef.h>
-
+#include <liburing.h>
 
 #define NETWORK_REACTOR 	0
 #define NETWORK_PROACTOR	1
@@ -25,6 +25,12 @@
 
 int resp_parse_bulk_size(const char * buf, size_t buf_size, int * head_len);
 
+typedef struct io_write_ctx_s{ // struct for io_uring context
+    char * buf;
+    size_t len;
+}io_write_ctx;
+
+int kvs_uring_init(int entry_length, struct io_uring * ring);
 
 typedef struct client_info_s{
 	int fd;
@@ -67,8 +73,8 @@ int reactor_start(unsigned short port, msg_handler handler);
 extern int proactor_start(unsigned short port, msg_handler handler);
 extern int ntyco_start(unsigned short port, msg_handler handler);
 
-
-
+int kvs_file_read(char * ptr, size_t size, msg_handler handler);
+int kvs_split_token(char *msg, char *tokens[]);
 #if ENABLE_ARRAY
 
 typedef struct kvs_array_item_s {
