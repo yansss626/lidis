@@ -28,9 +28,11 @@ int resp_parse_bulk_size(const char * buf, size_t buf_size, int * head_len);
 typedef struct io_write_ctx_s{ // struct for io_uring context
     char * buf;
     size_t len;
+	struct io_uring * ring;
+	int tasks_count; //number of io_uring_prep_write
 }io_write_ctx;
+int kvs_traversal_write(int fd, io_write_ctx * main_ctx);
 
-int kvs_uring_init(int entry_length, struct io_uring * ring);
 
 typedef struct client_info_s{
 	int fd;
