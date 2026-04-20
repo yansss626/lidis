@@ -159,14 +159,18 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type){
 
     if(tasks_count >= TARGET_LENGTH) io_uring_submit(&ring_save);
 
-    struct io_uring_cqe * cqe = NULL;
-    while(io_uring_peek_cqe(&ring_save, &cqe) == 0){
+    struct io_uring_cqe * cqes[TARGET_LENGTH] = {0};
+    int nready = io_uring_peek_batch_cqe(&ring_save, cqes, TARGET_LENGTH);
+    for(int i = 0; i < nready; i++){
+        struct io_uring_cqe * cqe = cqes[i];
         io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
         free(ctx->buf);
         free(ctx);
-        io_uring_cqe_seen(&ring_save, cqe);
         --tasks_count;
-    }  
+    }
+    io_uring_cq_advance(&ring_save, nready);
+
+      
     struct io_uring_sqe * sqe = io_uring_get_sqe(&ring_save);
     if(sqe == NULL){     
         io_uring_submit(&ring_save);
@@ -288,16 +292,18 @@ int kvs_save_write(){
     io_uring_submit(&ring_save);
     //printf("count: %d\n", tasks_count);
     struct io_uring_cqe * cqe = NULL;
-    while(tasks_count > 0){
-        if(io_uring_peek_cqe(&ring_save, &cqe) == 0){
+
+    if(tasks_count != 0){
+        while(io_uring_wait_cqe(&ring_save, &cqe) == 0){
             io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
             free(ctx->buf);
             free(ctx);
             io_uring_cqe_seen(&ring_save, cqe);
             --tasks_count;
+            if(tasks_count == 0) break;
         }
-
     }
+ 
     //printf("count: %d\n", tasks_count);
       
     close(fd);
