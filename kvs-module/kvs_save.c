@@ -43,7 +43,7 @@ typedef enum kvs_engine_type_t{
 
 
 
-static int tasks_count = 0; // number of io_uring_prep_write
+
 
 int kvs_save_handler(client_info * cli){
     if(cli == NULL) return -1;
@@ -98,8 +98,8 @@ int kvs_save_init(msg_handler handler){
     return 0;
 }
 
-int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type){
-    if(fd < 0 || key == NULL || value == NULL) return -1;
+int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, io_write_ctx * main_ctx){
+    if(fd < 0 || key == NULL || value == NULL || main_ctx == NULL) return -1;
     int ret = 0;
 
 
@@ -157,27 +157,27 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type){
     ctx->len = total_len;
     //printf("ctx->buf: %s\n", ctx->buf);
 
-    if(tasks_count >= TARGET_LENGTH) io_uring_submit(&ring_save);
+    if(main_ctx->tasks_count >= TARGET_LENGTH) io_uring_submit(main_ctx->ring);
 
     struct io_uring_cqe * cqes[TARGET_LENGTH] = {0};
-    int nready = io_uring_peek_batch_cqe(&ring_save, cqes, TARGET_LENGTH);
+    int nready = io_uring_peek_batch_cqe(main_ctx->ring, cqes, TARGET_LENGTH);
     for(int i = 0; i < nready; i++){
         struct io_uring_cqe * cqe = cqes[i];
         io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
         free(ctx->buf);
         free(ctx);
-        --tasks_count;
+        --main_ctx->tasks_count;
     }
-    io_uring_cq_advance(&ring_save, nready);
+    io_uring_cq_advance(main_ctx->ring, nready);
 
       
-    struct io_uring_sqe * sqe = io_uring_get_sqe(&ring_save);
+    struct io_uring_sqe * sqe = io_uring_get_sqe(main_ctx->ring);
     if(sqe == NULL){     
-        io_uring_submit(&ring_save);
+        io_uring_submit(main_ctx->ring);
         ret = -4;
         goto cleanup; 
     }
-    ++tasks_count;
+    ++main_ctx->tasks_count;
     io_uring_prep_write(sqe, fd, ctx->buf, total_len, -1);
     io_uring_sqe_set_data(sqe, ctx);
     
@@ -192,44 +192,29 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type){
 
 
 #if ENABLE_RBTREE
-int kvs_save_write_rbtree(rbtree *T, rbtree_node *node, int fd) {
+int kvs_save_write_rbtree(rbtree *T, rbtree_node *node, int fd, io_write_ctx *main_ctx) {
     if(T == NULL || fd < 0) return fd;
     int ret = 0;
 	if (node != T->nil) {
-        ret = kvs_io_uring_write(fd, node->key, node->value, KVS_RBTREE);
+        ret = kvs_io_uring_write(fd, node->key, node->value, KVS_RBTREE, main_ctx);
         if(ret < 0) fd = ret;
-		kvs_save_write_rbtree(T, node->left, fd);
+		kvs_save_write_rbtree(T, node->left, fd, main_ctx);
 
-		kvs_save_write_rbtree(T, node->right, fd);
+		kvs_save_write_rbtree(T, node->right, fd, main_ctx);
 	}
     return ret;
 }
 #endif
 
 
+int kvs_traversal_write(int fd, io_write_ctx * main_ctx){
 
-int kvs_save_write(){
-    if(global_config.enable_save == 0) return 0;
-
-    if(ring_save_inited == 0){
-    if(kvs_uring_init(ENTRY_LENGTH, &ring_save) != 0) {
-        return -1;
-    }
-    ring_save_inited = 1;
-}
-    int fd = open("./kvs-module/kvs_dump.rdb", O_WRONLY | O_CREAT | O_TRUNC, 0644); 
-    if(fd < 0) return -2;
-
-    tasks_count = 0;
     int ret = 0;
-
 #if ENABLE_RBTREE    
     kvs_rbtree_t * R_inst = &global_rbtree;
-    ret = kvs_save_write_rbtree(R_inst, R_inst->root, fd);
-    if(ret != 0){
-        close(fd);
-        return ret;
-    }
+    ret = kvs_save_write_rbtree(R_inst, R_inst->root, fd, main_ctx);
+    if(ret != 0) return ret;
+    
 #endif
 
 #if ENABLE_HASH
@@ -239,11 +224,9 @@ int kvs_save_write(){
         for (int i = 0;i < H_inst->max_slots;i ++) {
             hashnode_t *node = H_inst->nodes[i];
             while (node != NULL) { 
-                ret = kvs_io_uring_write(fd, node->key, node->value, KVS_HASH);
-                if(ret != 0){
-                    close(fd);
-                    return ret;
-                }             
+                ret = kvs_io_uring_write(fd, node->key, node->value, KVS_HASH, main_ctx);
+                if(ret != 0) return ret;
+                            
                 node = node->next;
                 --count;
             }
@@ -260,11 +243,9 @@ int kvs_save_write(){
         int count = inst->total;
         for (int i = 0;i < KVS_ARRAY_SIZE;i ++) {
             if (inst->table[i].key != NULL) {
-                ret = kvs_io_uring_write(fd, inst->table[i].key, inst->table[i].value, KVS_ARRAY);
-                if(ret != 0){
-                    close(fd);
-                    return ret;
-                }                
+                ret = kvs_io_uring_write(fd, inst->table[i].key, inst->table[i].value, KVS_ARRAY, main_ctx);
+                if(ret != 0) return ret;
+                    
                 --count;
             }
             if(count <= 0) break;
@@ -279,32 +260,49 @@ int kvs_save_write(){
     kvs_skiplist_t * L_inst = &global_skiplist;
     Node * current = L_inst->header->forward[0];
     while(current != NULL){
-        ret = kvs_io_uring_write(fd, current->key, current->value, KVS_SKIPLIST);
-        if(ret != 0){
-            close(fd);
-            return ret;
-        }
+        ret = kvs_io_uring_write(fd, current->key, current->value, KVS_SKIPLIST, main_ctx);
+        if(ret != 0) return ret;
+        
         current = current->forward[0];
     }
 
 
 #endif
-    io_uring_submit(&ring_save);
-    //printf("count: %d\n", tasks_count);
+    io_uring_submit(main_ctx->ring);
+    printf("count: %d\n", main_ctx->tasks_count);
     struct io_uring_cqe * cqe = NULL;
 
-    if(tasks_count != 0){
-        while(io_uring_wait_cqe(&ring_save, &cqe) == 0){
+    if(main_ctx->tasks_count != 0){
+        while(io_uring_wait_cqe(main_ctx->ring, &cqe) == 0){
             io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
             free(ctx->buf);
             free(ctx);
-            io_uring_cqe_seen(&ring_save, cqe);
-            --tasks_count;
-            if(tasks_count == 0) break;
+            io_uring_cqe_seen(main_ctx->ring, cqe);
+            --main_ctx->tasks_count;
+            if(main_ctx->tasks_count == 0) break;
         }
     }
- 
-    //printf("count: %d\n", tasks_count);
+    return ret;
+    printf("count: %d\n", main_ctx->tasks_count);
+}
+
+int kvs_save_write(){
+    if(global_config.enable_save == 0) return 0;
+
+    if(ring_save_inited == 0){
+    if(io_uring_queue_init(ENTRY_LENGTH, &ring_save, 0) != 0) {
+        return -1;
+    }
+    ring_save_inited = 1;
+}
+    int fd = open("./kvs-module/kvs_dump.rdb", O_WRONLY | O_CREAT | O_TRUNC, 0644); 
+    if(fd < 0) return -2;
+
+    io_write_ctx main_ctx = {0};
+    main_ctx.ring = &ring_save;
+    main_ctx.tasks_count = 0;
+
+    kvs_traversal_write(fd, &main_ctx);
       
     close(fd);
 
