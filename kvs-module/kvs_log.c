@@ -79,16 +79,7 @@ int kvs_file_read(char * ptr, size_t size, msg_handler handler){
     return 0;
 }
 
-int kvs_uring_init(int entry_length, struct io_uring * ring){
-    int ret = io_uring_queue_init(entry_length, ring, 0);
-    if(ret < 0){
-        fprintf(stderr, "io_uring_queue_init error: %s\n", strerror(-ret));
-        return -1;
-    }
 
-    return 0;
-
-}
 
 int kvs_log_init(msg_handler handler){
     if(global_config.enable_log == 0) return 0;
@@ -97,7 +88,8 @@ int kvs_log_init(msg_handler handler){
         perror("open");
         return -1;
     }
-    kvs_uring_init(ENTRY_LENGTH, &ring_log);
+    io_uring_queue_init(ENTRY_LENGTH, &ring_log, 0);
+
     ring_log_inited = 1;
 
     struct stat statbuf = {0};
