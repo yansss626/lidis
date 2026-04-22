@@ -269,7 +269,7 @@ int kvs_traversal_write(int fd, io_write_ctx * main_ctx){
 
 #endif
     io_uring_submit(main_ctx->ring);
-    printf("count: %d\n", main_ctx->tasks_count);
+    //printf("main_ctx->tasks_count: %d\n", main_ctx->tasks_count);
     struct io_uring_cqe * cqe = NULL;
 
     if(main_ctx->tasks_count != 0){
@@ -283,7 +283,6 @@ int kvs_traversal_write(int fd, io_write_ctx * main_ctx){
         }
     }
     return ret;
-    printf("count: %d\n", main_ctx->tasks_count);
 }
 
 int kvs_save_write(){
