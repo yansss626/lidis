@@ -28,7 +28,8 @@ int kvs_slaves_destroy(kvs_slaves * inst);
 int kvs_full_sync(kvs_slaves * inst, client_info * cli);
 int kvs_incr_sync(kvs_slaves * inst, client_info * cli);
 
-
+int rdma_client(const char * server_ip, const char * port, char * ptr, size_t size);
+int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd);
 
 
 

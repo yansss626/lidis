@@ -6,38 +6,31 @@
 #include <string.h>
 #include "nty_coroutine.h"
 
-
-
 #define MSG_LENGTH 32
-#define SYNC_SIZE 32
+#define SYNC_SIZE 32 // Max size for slaves count
 #define BUFFER_SIZE 1024
+#define ENTRY_LENGTH 1024
+
 kvs_slaves global_slaves = {0};
 
 extern kvs_conf_t global_config;
 
-#if ENABLE_ARRAY
-extern kvs_array_t global_array;
-#endif
-
-#if ENABLE_RBTREE
-extern kvs_rbtree_t global_rbtree;
-#endif
-
-#if ENABLE_HASH
-extern kvs_hash_t global_hash;
-#endif
-
-#if ENABLE_SKIPLIST
-extern kvs_skiplist_t global_skiplist;
-#endif
-
-int kvs_write_snapshot(FILE * fp);
 
 int kvs_connect_to_master(const char * ip, unsigned short port){
     if(global_config.enable_sync == 0) return 0;
     if(ip == NULL) return -1;
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if(sockfd < 0) return -2;
+
+    int sockfd = -1;
+    int ret = 0;
+    char * rdma_buf;
+    int rdma_mod_size = 0; //rdma modified size
+    int rdma_buf_size = 0;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(sockfd < 0) {
+        ret = -2; 
+        goto cleanup;
+    }
 
     struct sockaddr_in remote = {0};
     remote.sin_family = AF_INET;
@@ -46,13 +39,38 @@ int kvs_connect_to_master(const char * ip, unsigned short port){
 
     if(connect(sockfd, (struct sockaddr *)&remote, sizeof(struct sockaddr_in)) != 0){
         perror("connect error");
-        return -3;
-    }   
+        ret = -3;
+        goto cleanup;
+    }
+    
 
     char * cmd = "SYNC";
     char msg[MSG_LENGTH] = {0};
-    int length = snprintf(msg, MSG_LENGTH, "%ld*%s", strlen(cmd), cmd); // add protocol <length>*<cmd>
+    int length = snprintf(msg, MSG_LENGTH, "*1\r\n$%ld\r\n%s\r\n", strlen(cmd), cmd); // 
     send(sockfd, msg, length, 0);
+    
+
+    int n = recv(sockfd, msg, MSG_LENGTH - 1, 0);
+    if(n <= 0 || strncmp(msg, "+FULLSYNC ", 10) != 0){
+        ret = -4;
+        goto cleanup;
+    }
+    msg[n] = '\0';
+    rdma_buf_size = atoi(msg + 10);
+
+    //printf("size: %d\n", rdma_buf_size);
+    if(rdma_buf_size > 0){
+        rdma_buf = (char *)malloc(rdma_buf_size + 1);
+        if(rdma_buf == NULL){
+            perror("malloc");
+            ret = -5;
+            goto cleanup;
+        }
+        memset(rdma_buf, 0, rdma_buf_size + 1);
+
+        rdma_mod_size = rdma_server(global_config.rdma_port, rdma_buf, rdma_buf_size, sockfd);
+        kvs_file_read(rdma_buf, rdma_mod_size, kvs_save_handler);        
+    }
 
 
 #if (NETWORK_SELECT == NETWORK_NTYCO)
@@ -62,130 +80,89 @@ int kvs_connect_to_master(const char * ip, unsigned short port){
     nty_coroutine_create(&read_co, server_reader, cli_info);
 #endif
 
+    
 
-    return 0;
+    cleanup:
+        if(ret != 0 && sockfd > 0) close(sockfd);
+        if(rdma_buf != NULL) free(rdma_buf);
+        return ret;
 }
 
 int kvs_full_sync(kvs_slaves * inst, client_info * cli){
-    if(global_config.enable_sync == 0) return 0;
-    if(cli == NULL || inst == NULL) return -1;
-    if(inst->table == NULL){
+    if (global_config.enable_sync == 0) return 0;
+    if (cli == NULL || inst == NULL) return -1;
+    if (inst->table == NULL) {
         kvs_slaves_create(inst);
     }
     kvs_slaves_insert(inst, cli->fd);
     cli->role = 1;
 
-    FILE * fp = fopen("kvs_snapshot.txt", "w+");
-    if(kvs_write_snapshot(fp) > 0){
-        fseek(fp, 0, SEEK_SET);
-        int payload_length = 0;
-        char * buffer = (char *)kvs_malloc(BUFFER_SIZE);
-        int cap = BUFFER_SIZE;
-        if(buffer == NULL) return -2;
-        memset(buffer, 0, BUFFER_SIZE);
-        while(fscanf(fp, "%d*", &payload_length) > 0){
-            int head_len = sprintf(buffer, "%d*", payload_length);
-            int total_len = payload_length + head_len;
-            if(cap < total_len - 1){
-                char * temp = realloc(buffer, total_len);
-                if(temp == NULL){
-                    perror("realloc error");
-                    return -2;
-                }
-                cap = total_len;
-                buffer = temp;
-            }
-            fread(buffer + head_len, 1, payload_length, fp);
-            buffer[total_len] = '\0';
-            int ret = send(cli->fd, buffer, total_len, 0);
-        }
-        kvs_free(buffer);
+    int ret = 0;
+    struct io_uring ring = {0};
+    int fd = 0;
+    char * ptr;
+    if(io_uring_queue_init(ENTRY_LENGTH, &ring, 0) < 0){
+        perror("io_uring_queue_init");
+        ret = -2;
+        goto cleanup;
     }
-    else{
-        //printf("No need to sync\n");
-    }
-    fclose(fp);
+        
     
+    fd = open("kvs_snapshot.rdb", O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if(fd < 0){
+        perror("open");
+        ret = -3;
+        goto cleanup;
+    }
+
+    io_write_ctx main_ctx = {0};
+    main_ctx.ring = &ring;
+    main_ctx.tasks_count = 0;
+    if(kvs_traversal_write(fd, &main_ctx) < 0) {
+        ret = -4; 
+        goto cleanup;
+    }
+
+    struct stat statbuf = {0};
+    fstat(fd, &statbuf);
+
+    char reply[MSG_LENGTH];
+    int len = snprintf(reply, MSG_LENGTH, "+FULLSYNC %ld\r\n", statbuf.st_size);
+    send(cli->fd, reply, len, 0);
+    if(statbuf.st_size == 0) goto cleanup;
+
+    len = recv(cli->fd, reply, MSG_LENGTH - 1, 0);
+    if(len <= 0 || strncmp(reply, "+READY", 6) != 0 ) {
+        ret = -6; 
+        goto cleanup;
+    }
+    //printf("reply: %s\n", reply);
+
+    ptr = (char *)mmap(NULL, statbuf.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if(ptr == MAP_FAILED){
+        perror("mmap");
+        ret = -5;
+        goto cleanup;
+    }
+    
+    rdma_client(global_config.rdma_server_ip, global_config.rdma_port, ptr, statbuf.st_size);
     
 
-
-    return 0;
+    cleanup:
+        
+        if(ret != -2) io_uring_queue_exit(&ring);
+        if(ret != 0 && fd > 0) {kvs_slaves_delete(&global_slaves, fd); close(fd);}
+        if(ptr != MAP_FAILED) munmap(ptr, statbuf.st_size);
+        return ret;
 }
 
 
 
 
 
-#if ENABLE_RBTREE
-int kvs_write_snapshot_rbtree(rbtree *T, rbtree_node *node, FILE * fp) {
-    if(T == NULL || fp == NULL) return -1;
-    int payload_length = 0;
-	if (node != T->nil) {
-        payload_length = strlen(node->key) + strlen((char *)node->value) + 2 + strlen("RSET");
-        //fprintf(fp, "RSET %s %s\r\n", node->key, (char *)node->value);
-        fprintf(fp, "%d*RSET %s %s\r\n", payload_length, node->key, (char *)node->value);
-		kvs_write_snapshot_rbtree(T, node->left, fp);
-  
-		kvs_write_snapshot_rbtree(T, node->right, fp);
-	}
-    return payload_length;
-}
-#endif
 
-int kvs_write_snapshot(FILE * fp){
-    if(fp == NULL) return -1;
-    int payload_length = 0;
-#if ENABLE_RBTREE    
-    kvs_rbtree_t * R_inst = &global_rbtree; 
-    payload_length = kvs_write_snapshot_rbtree(R_inst, R_inst->root, fp);
-#endif
-    
-#if ENABLE_HASH
-    kvs_hash_t *  H_inst = &global_hash;
-    if(H_inst->count > 0){
-        for (int i = 0;i < H_inst->max_slots;i ++) {
-            hashnode_t *node = H_inst->nodes[i];
-            while (node != NULL) { 
-                payload_length = strlen(node->key) + strlen(node->value) + 2 + strlen("HSET");
-                //fprintf(fp, "HSET %s %s\r\n", node->key, node->value);
-                fprintf(fp, "%d*HSET %s %s\r\n", payload_length, node->key, (char *)node->value);
-                node = node->next;
-                
-            }
-        }
-    }
-   
-#endif
 
-#if ENABLE_ARRAY
 
-    kvs_array_t * inst = &global_array;
-    if(inst->total > 0){
-        for (int i = 0;i < KVS_ARRAY_SIZE;i ++) {
-            if (inst->table[i].key != NULL) {
-                payload_length = strlen(inst->table[i].key) + strlen(inst->table[i].value) + 2 + strlen("SET");
-                //fprintf(fp, "SET %s %s\r\n", inst->table[i].key, inst->table[i].value);      
-                fprintf(fp, "%d*SET %s %s\r\n", payload_length, inst->table[i].key, inst->table[i].value);
-            }
-        }
-    }
-
-       
-#endif
-
-#if ENABLE_SKIPLIST
-    kvs_skiplist_t * L_inst = &global_skiplist;
-    Node * current = L_inst->header->forward[0];
-    while(current != NULL){
-        payload_length = strlen(current->key) + strlen(current->value) + 2 + strlen("LSET");
-        fprintf(fp, "%d*LSET %s %s\r\n", payload_length, current->key, current->value);
-        current = current->forward[0];
-    }
-
-#endif
-    fflush(fp);
-    return payload_length;
-}
 
 
 int kvs_incr_sync(kvs_slaves * inst, client_info * cli){
