@@ -23,7 +23,7 @@
 #define ENABLE_SKIPLIST		1
 
 
-int resp_parse_bulk_size(const char * buf, size_t buf_size, int * head_len);
+
 
 typedef struct io_write_ctx_s{ // struct for io_uring context
     char * buf;
@@ -31,8 +31,6 @@ typedef struct io_write_ctx_s{ // struct for io_uring context
 	struct io_uring * ring;
 	int tasks_count; //number of io_uring_prep_write
 }io_write_ctx;
-int kvs_traversal_write(int fd, io_write_ctx * main_ctx);
-
 
 typedef struct client_info_s{
 	int fd;
@@ -50,6 +48,7 @@ typedef struct client_info_s{
 }client_info;
 
 #define IPV4_MAX_STR_LEN 16
+#define PORT_MAX_STR_LEN 5  // "0"~"65535"
 typedef struct kvs_conf_s
 {
 	int enable_log;
@@ -59,8 +58,11 @@ typedef struct kvs_conf_s
 	int master_port;
 	int mode;
 	int port;
+	char rdma_server_ip[IPV4_MAX_STR_LEN]; // ip for rdma communication    IPV4
+	char rdma_port[PORT_MAX_STR_LEN]; //port for rdma communiaction
+
 }kvs_conf_t; // kvstore configuration
-int kvs_config_init(kvs_conf_t *  conf);
+
 
 #include "kvs_sync.h"
 
@@ -77,6 +79,11 @@ extern int ntyco_start(unsigned short port, msg_handler handler);
 
 int kvs_file_read(char * ptr, size_t size, msg_handler handler);
 int kvs_split_token(char *msg, char *tokens[]);
+int kvs_save_handler(client_info * cli);
+int resp_parse_bulk_size(const char * buf, size_t buf_size, int * head_len);
+int kvs_traversal_write(int fd, io_write_ctx * main_ctx);
+int kvs_config_init(kvs_conf_t *  conf);
+
 #if ENABLE_ARRAY
 
 typedef struct kvs_array_item_s {

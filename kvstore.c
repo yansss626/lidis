@@ -444,15 +444,15 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	}
 
 
-	if(is_write_success == 1) {
+	if(is_write_success == 1 && is_recovering == 0) {
 			for(int i = 0; i < count; i++){
 				int pos = strlen(tokens[i]);
 				(tokens[i])[pos] = '\r';
 			} // repair cli->rbuf due to kvs_split_token
-		if(is_recovering == 0){
+		
 			kvs_log_write(cli);
-		} 
-		kvs_incr_sync(&global_slaves, cli);
+			kvs_incr_sync(&global_slaves, cli);
+		
 	}
 	return length;
 }
@@ -542,7 +542,7 @@ void kvs_deinit(){
 
 const char * configuation[] = {
 	"ENABLE_MODULE_SYNC", "ENABLE_MODULE_LOG", "ENABLE_MODULE_SAVE",
-	"Master_ip", "Master_port", "Mode", "Port"
+	"Master_ip", "Master_port", "Mode", "Port", "Rdma_server_ip", "Rdma_port",
 };
 enum kvs_conf_t{ // enum used for configutaion setup
 	KVS_CONF_START = 0,
@@ -556,6 +556,9 @@ enum kvs_conf_t{ // enum used for configutaion setup
 
 	KVS_MODE,
 	KVS_PORT,
+
+	KVS_RDMA_SERVER_IP,
+	KVS_RDMA_PORT,
 	
 	KVS_CONF_COUNT
 };
@@ -596,6 +599,12 @@ int kvs_config_init(kvs_conf_t *  conf){
 			break;
 		case KVS_PORT:
 			conf->port = atoi(value);
+			break;	
+		case KVS_RDMA_SERVER_IP:
+			strncpy(conf->rdma_server_ip, value, strlen(value) + 1);
+			break;	
+		case KVS_RDMA_PORT:
+			strncpy(conf->rdma_port, value, strlen(value) + 1) ;
 			break;	
 		default:
 			break;
