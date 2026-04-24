@@ -7,95 +7,119 @@
 #include "nty_coroutine.h"
 
 #define MSG_LENGTH 32
-#define SYNC_SIZE 32 // Max size for slaves count
 #define BUFFER_SIZE 1024
 #define ENTRY_LENGTH 1024
 
-kvs_slaves global_slaves = {0};
+
 
 extern kvs_conf_t global_config;
 
 
-int kvs_connect_to_master(const char * ip, unsigned short port){
-    if(global_config.enable_sync == 0) return 0;
-    if(ip == NULL) return -1;
+int kvs_connect_to_remote(const char * ip, unsigned int port){
+    if (ip == NULL || port > 65535) return -1;
 
-    int sockfd = -1;
     int ret = 0;
-    char * rdma_buf;
-    int rdma_mod_size = 0; //rdma modified size
-    int rdma_buf_size = 0;
+    int sockfd = -1;
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if(sockfd < 0) {
-        ret = -2; 
-        goto cleanup;
+    if (sockfd < 0) {
+        return -2;
     }
-
     struct sockaddr_in remote = {0};
     remote.sin_family = AF_INET;
     remote.sin_port = htons(port);
     remote.sin_addr.s_addr = inet_addr(ip);
 
-    if(connect(sockfd, (struct sockaddr *)&remote, sizeof(struct sockaddr_in)) != 0){
+    if (connect(sockfd, (struct sockaddr *)&remote, sizeof(struct sockaddr_in)) != 0) {
         perror("connect error");
-        ret = -3;
-        goto cleanup;
+        close(sockfd);
+        return -3;
+    }
+    return sockfd;
+}
+
+int kvs_connect_to_sync(){
+    if(global_config.enable_sync == 0) return 0;
+
+
+    int master_fd = -1;
+    int agent_fd = -1;
+    int ret = 0;
+    char * rdma_buf;
+    int rdma_mod_size = 0; //rdma modified size
+    int rdma_buf_size = 0;
+    const char * master_ip = global_config.master_ip;
+    unsigned int master_port = global_config.master_port;
+    const char * agent_ip = global_config.agent_ip;
+    unsigned int agent_port = global_config.agent_port;
+
+// full sync
+    master_fd =  kvs_connect_to_remote(master_ip, master_port);
+    if (master_fd < 0) {
+        fprintf(stderr, "Error: master_fd = %d\n", master_fd);
+        return -1;
     }
     
 
     char * cmd = "SYNC";
     char msg[MSG_LENGTH] = {0};
     int length = snprintf(msg, MSG_LENGTH, "*1\r\n$%ld\r\n%s\r\n", strlen(cmd), cmd); // 
-    send(sockfd, msg, length, 0);
+    send(master_fd, msg, length, 0);
     
 
-    int n = recv(sockfd, msg, MSG_LENGTH - 1, 0);
-    if(n <= 0 || strncmp(msg, "+FULLSYNC ", 10) != 0){
-        ret = -4;
+    int n = recv(master_fd, msg, MSG_LENGTH - 1, 0);
+    if (n <= 0 || strncmp(msg, "+FULLSYNC ", 10) != 0) {
+        ret = -2;
         goto cleanup;
     }
     msg[n] = '\0';
     rdma_buf_size = atoi(msg + 10);
 
     //printf("size: %d\n", rdma_buf_size);
-    if(rdma_buf_size > 0){
+    if (rdma_buf_size > 0) {
         rdma_buf = (char *)malloc(rdma_buf_size + 1);
-        if(rdma_buf == NULL){
+        if (rdma_buf == NULL) {
             perror("malloc");
-            ret = -5;
+            ret = -3;
             goto cleanup;
         }
         memset(rdma_buf, 0, rdma_buf_size + 1);
 
-        rdma_mod_size = rdma_server(global_config.rdma_port, rdma_buf, rdma_buf_size, sockfd);
+        rdma_mod_size = rdma_server(global_config.rdma_port, rdma_buf, rdma_buf_size, master_fd);
         kvs_file_read(rdma_buf, rdma_mod_size, kvs_save_handler);        
+    }
+    close(master_fd);
+    master_fd = 1;
+// end of full sync
+  
+// incr sync
+    agent_fd = kvs_connect_to_remote(agent_ip, agent_port);
+    if (agent_fd < 0) {
+        fprintf(stderr, "Error: agent_fd = %d\n", agent_fd);
+        return -1;
     }
 
 
 #if (NETWORK_SELECT == NETWORK_NTYCO)
-    client_info * cli_info = client_info_init(sockfd);
+    client_info * cli_info = client_info_init(agent_fd);
     cli_info->role = 1; // slave;
     nty_coroutine * read_co = NULL;
     nty_coroutine_create(&read_co, server_reader, cli_info);
 #endif
-
+// end of sync
     
 
     cleanup:
-        if(ret != 0 && sockfd > 0) close(sockfd);
+        if(ret != 0 && master_fd > 0) close(master_fd);
         if(rdma_buf != NULL) free(rdma_buf);
         return ret;
 }
 
-int kvs_full_sync(kvs_slaves * inst, client_info * cli){
+int kvs_full_sync(client_info * cli){
     if (global_config.enable_sync == 0) return 0;
-    if (cli == NULL || inst == NULL) return -1;
-    if (inst->table == NULL) {
-        kvs_slaves_create(inst);
-    }
-    kvs_slaves_insert(inst, cli->fd);
-    cli->role = 1;
+    if (cli == NULL) return -1;
+
+
 
     int ret = 0;
     struct io_uring ring = {0};
@@ -136,7 +160,7 @@ int kvs_full_sync(kvs_slaves * inst, client_info * cli){
         ret = -6; 
         goto cleanup;
     }
-    //printf("reply: %s\n", reply);
+    printf("reply: %s\n", reply);
 
     ptr = (char *)mmap(NULL, statbuf.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if(ptr == MAP_FAILED){
@@ -146,116 +170,21 @@ int kvs_full_sync(kvs_slaves * inst, client_info * cli){
     }
     
     rdma_client(global_config.rdma_server_ip, global_config.rdma_port, ptr, statbuf.st_size);
-    
+
 
     cleanup:
         
         if(ret != -2) io_uring_queue_exit(&ring);
-        if(ret != 0 && fd > 0) {kvs_slaves_delete(&global_slaves, fd); close(fd);}
+        if(ret != 0 && fd > 0) close(fd);
         if(ptr != MAP_FAILED) munmap(ptr, statbuf.st_size);
         return ret;
 }
 
-
-
-
-
-
-
-
-
-
-int kvs_incr_sync(kvs_slaves * inst, client_info * cli){
-    if(global_config.enable_sync == 0) return 0;
-    if(inst == NULL || inst->table == NULL || cli == NULL) return -1;
-
-
-
-    int synced_num = 0;
-    for(int i = 0; i < inst->size; i++){
-        int fd = inst->table[i].fd;
-        if(fd > 0){
-            send(fd, cli->rbuf, cli->cmd_tl, 0);
-            synced_num++;
-            if(synced_num == inst->total) break;
-        }
-        
-    }   
-
-
-
+int kvs_incr_sync(client_info * cli){
+    if(cli == NULL) return -1;
+    //printf("cli->rbuf: %s\n", cli->rbuf);
     return 0;
 }
 
 
-
-
-
-
-
-
-
-int kvs_slaves_create(kvs_slaves * inst){
-
-    if(inst == NULL) return -1;
-    if(inst->table != NULL) return 0;
-
-    inst->table = (kvs_slave_item *)kvs_malloc(sizeof(kvs_slave_item) * SYNC_SIZE);
-    if(inst->table == NULL) {
-        printf("kvs_malloc error\n");
-        return -2;
-    }
-    memset(inst->table, 0, sizeof(kvs_slave_item) * SYNC_SIZE);
-
-    inst->total = 0;
-    inst->size = SYNC_SIZE;
-
-    return 0;
-}
-
-
-int kvs_slaves_insert(kvs_slaves * inst, int fd){
-    if(inst == NULL) return -1;
-    if(inst->total == inst->size) return -2;
-
-    int i = 0;
-    for(; i < inst->size; i++){
-        if(inst->table[i].fd == 0) {
-            inst->table[i].fd = fd;
-            break;
-        }
-    }
-
-    ++(inst->total);
-    
-    return 0;
-}
-
-int kvs_slaves_delete(kvs_slaves * inst, int fd){
-    if(inst == NULL) return -1;
-    if(inst->total == 0) return 0;
-    int i = 0;
-    for(; i < inst->size; i++){
-        if(inst->table[i].fd == fd) {
-            inst->table[i].fd = 0;
-            --(inst->total);
-            break;
-        }
-    }
-
-
-
-
-    return 0;
-}
-
-int kvs_slaves_destroy(kvs_slaves * inst){
-
-    if(inst == NULL) return -1;
-    
-    if(inst->table != NULL) kvs_free(inst->table);
-    inst->table = NULL;
-
-    return 0;
-}
 
