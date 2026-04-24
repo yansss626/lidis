@@ -24,7 +24,7 @@ extern kvs_skiplist_t global_skiplist;
 
 #define BUFFER_SIZE 1024
 
-extern kvs_slaves global_slaves;
+
 
 
 void *kvs_malloc(size_t size) {
@@ -391,7 +391,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		}
 		break;
 	case KVS_CMD_SYNC:
-		kvs_full_sync(&global_slaves, cli);
+		kvs_full_sync(cli);
 		length = 0;
 		break;
 
@@ -451,7 +451,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			} // repair cli->rbuf due to kvs_split_token
 		
 			kvs_log_write(cli);
-			kvs_incr_sync(&global_slaves, cli);
+			kvs_incr_sync(cli);
 		
 	}
 	return length;
@@ -537,12 +537,13 @@ void kvs_init(){
 void kvs_deinit(){
 	dest_kvengine();
 	kvs_log_close();
-	kvs_slaves_destroy(&global_slaves);
+	kvs_save_close();
 }
 
 const char * configuation[] = {
 	"ENABLE_MODULE_SYNC", "ENABLE_MODULE_LOG", "ENABLE_MODULE_SAVE",
 	"Master_ip", "Master_port", "Mode", "Port", "Rdma_server_ip", "Rdma_port",
+	"Agent_ip", "Agent_port",
 };
 enum kvs_conf_t{ // enum used for configutaion setup
 	KVS_CONF_START = 0,
@@ -559,6 +560,9 @@ enum kvs_conf_t{ // enum used for configutaion setup
 
 	KVS_RDMA_SERVER_IP,
 	KVS_RDMA_PORT,
+
+	KVS_AGENT_IP,
+	KVS_AGENT_PORT,
 	
 	KVS_CONF_COUNT
 };
@@ -606,6 +610,12 @@ int kvs_config_init(kvs_conf_t *  conf){
 		case KVS_RDMA_PORT:
 			strncpy(conf->rdma_port, value, strlen(value) + 1) ;
 			break;	
+		case KVS_AGENT_IP:
+			strncpy(conf->agent_ip, value, strlen(value)+ 1);
+			break;	
+		case KVS_AGENT_PORT:
+			conf->agent_port = atoi(value);
+			break;				
 		default:
 			break;
 		}
@@ -624,7 +634,7 @@ int main(int argc, char *argv[]) {
 	is_recovering = 0;
 	
 	if(global_config.mode == 1){
-		if(0 != kvs_connect_to_master(global_config.master_ip, global_config.master_port)){
+		if(0 != kvs_connect_to_sync()){
 			printf("failed to sync\n");
 		}
 	}

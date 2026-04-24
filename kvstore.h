@@ -61,6 +61,10 @@ typedef struct kvs_conf_s
 	char rdma_server_ip[IPV4_MAX_STR_LEN]; // ip for rdma communication    IPV4
 	char rdma_port[PORT_MAX_STR_LEN]; //port for rdma communiaction
 
+	char agent_ip[IPV4_MAX_STR_LEN]; // IPV4
+	int agent_port;
+
+
 }kvs_conf_t; // kvstore configuration
 
 
@@ -244,7 +248,7 @@ int kvs_log_close();
 // Mechanism of SAVE****************//
 int kvs_save_init(msg_handler handler);
 int kvs_save_write();
-int kvs_save_read();
+int kvs_save_close();
 //*********************************//
 
 

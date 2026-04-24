@@ -10,7 +10,7 @@
 
 static msg_handler kvs_handler;
 
-extern kvs_slaves global_slaves;
+
 
 
 
@@ -123,8 +123,7 @@ void server_reader(void *arg) {
 			}
 			ret = recv(cli_info->fd, cli_info->rbuf + cli_info->r_pos, cli_info->r_cap - cli_info->r_pos, 0);
 
-			if (ret <= 0) {	
-				if(cli_info->role == 1) kvs_slaves_delete(&global_slaves, cli_info->fd);
+			if (ret <= 0) {
 				break;
 			}
 			else {
