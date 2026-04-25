@@ -330,28 +330,33 @@ else ret = send(cli_info->fd, cli_info->wbuf, cli_info->w_pos, 0);
 
 ## Kvstore 性能
 
-虚拟机配置：![alt text](image-15.png)
+虚拟机配置：
+![虚拟机配置](https://img.0voice.com/6780/8ae9726839f2cc8abacb45d423f8d456.png)
+
 Linux内核版本：ubuntu 22.04.5  6.8.0-107-generic
 
+echo服务器 单线程 echo十万条数据（测试了三次）
+![alt text](https://img.0voice.com/6780/a4423ce2f0defeff0f4a3ff649a89e9d.png)
+
 SET十万条数据（写性能）       
-![alt text](image-1.png)
+![alt text](https://img.0voice.com/6780/4d4cfb3454c6726eee0117a74c25b2f3.png)
 
 GET十万条数据（读性能）
-![alt text](image-2.png)
+![alt text](https://img.0voice.com/6780/9ce2132d78c66b185179e0aa1b56be32.png)
 
 redis （写性能）
 
-哈希：![alt text](image-4.png)![alt text](image-5.png)
+哈希：![alt text](https://img.0voice.com/6780/cf34e7966ef5ef4f1eafa857204abfa6.png)![alt text](https://img.0voice.com/6780/1ae40b1223f30ce6e54826b0ceebc1b3.png)
 
-跳表：![alt text](image-8.png)![alt text](image-9.png)
+跳表：![alt text](https://img.0voice.com/6780/6b4b313b742cf150fc5dbb8392528bc2.png)![alt text](https://img.0voice.com/6780/eb416bb601813f9deaa987ab14d49bd8.png)
 
 redis （读性能）
  
-哈希：![alt text](image-12.png) ![alt text](image-13.png)
+哈希：![alt text](https://img.0voice.com/6780/16537ec75f1ce96e4e8862a47fa4d971.png) ![alt text](https://img.0voice.com/6780/b84e311895eff603f177b0a5bcdfdb35.png)
 
-哈希：![alt text](image-10.png) ![alt text](image-11.png)
+跳表：![alt text](https://img.0voice.com/6780/a8e85fbebfda7b70a61255ada54da5e7.png) ![alt text](https://img.0voice.com/6780/72137bdbb810f754becb300caefac4e7.png)
 
 
 主从同步写性能：
 SET十万条数据：
-![alt text](image-14.png)
+
