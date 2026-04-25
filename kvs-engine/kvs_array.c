@@ -30,8 +30,14 @@ void kvs_array_destory(kvs_array_t *inst) {
 	if (!inst) return ;
 
 	if (inst->table) {
+		for (int i = 0; i < KVS_ARRAY_SIZE; i++) {
+			kvs_array_item_t item = inst->table[i];
+			if (item.key) kvs_free(item.key);
+			if (item.value) kvs_free(item.value);
+		}
 		kvs_free(inst->table);
 	}
+	inst->table = NULL;
 
 }
 
@@ -56,7 +62,10 @@ int kvs_array_set(kvs_array_t *inst, char *key, char *value) {
 	strncpy(kcopy, key, strlen(key));
 
 	char *kvalue = kvs_malloc(strlen(value) + 1);
-	if (kvalue == NULL) return -2;
+	if (kvalue == NULL) {
+		kvs_free(kcopy);
+		return -2;
+	}
 	memset(kvalue, 0, strlen(value) + 1);
 	strncpy(kvalue, value, strlen(value));
 
@@ -151,10 +160,11 @@ int kvs_array_mod(kvs_array_t *inst, char *key, char *value) {
 
 		if (strcmp(inst->table[i].key, key) == 0) {
 
-			kvs_free(inst->table[i].value);
-
 			char *kvalue = kvs_malloc(strlen(value) + 1);
 			if (kvalue == NULL) return -2;
+			
+			kvs_free(inst->table[i].value);
+
 			memset(kvalue, 0, strlen(value) + 1);
 			strncpy(kvalue, value, strlen(value));
 
