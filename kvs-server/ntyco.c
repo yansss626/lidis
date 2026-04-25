@@ -105,7 +105,35 @@ client_info * client_info_init(int fd){
 	
 }
 
+void echo_server(void *arg) {
+		client_info * cli_info = (client_info *)arg;
+		int ret = 0;
+	while (1) {
+		
+		char buf[BUFFER_SIZE] = {0};
+		ret = recv(cli_info->fd, buf, 1024, 0);
+		if (ret > 0) {
 
+			ret = send(cli_info->fd, buf, ret, 0);
+			if (ret == -1) {
+				close(cli_info->fd);
+				break;
+			}
+		} else if (ret == 0) {	
+			close(cli_info->fd);
+			break;
+		}
+
+	}
+
+		cleanup:
+		close(cli_info->fd);
+		if(cli_info->rbuf != NULL) free(cli_info->rbuf);
+		if(cli_info->wbuf != NULL) free(cli_info->wbuf);
+		free(cli_info);
+		cli_info = NULL;
+
+}
 
 
 void server_reader(void *arg) {
@@ -217,7 +245,7 @@ void server(void *arg) {
 
 		nty_coroutine *read_co;
 		nty_coroutine_create(&read_co, server_reader, cli_info);
-
+		//nty_coroutine_create(&read_co, echo_server, cli_info);
 	}
 	
 }
