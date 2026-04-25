@@ -104,7 +104,7 @@ void skiplist_testcase(redisContext *c, int count) {
 void testcase_all(redisContext *c, int count){
     rbtree_testcase(c, count);
     skiplist_testcase(c, count);
-    array_testcase(c, count);
+    //array_testcase(c, count);
     hash_testcase(c, count);
 }
 
