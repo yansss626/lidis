@@ -160,7 +160,7 @@ int kvs_full_sync(client_info * cli){
         ret = -6; 
         goto cleanup;
     }
-    printf("reply: %s\n", reply);
+    //printf("reply: %s\n", reply);
 
     ptr = (char *)mmap(NULL, statbuf.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if(ptr == MAP_FAILED){
