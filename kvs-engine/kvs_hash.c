@@ -43,7 +43,10 @@ hashnode_t *_create_node(char *key, char *value) {
 	
 #if ENABLE_KEY_POINTER
 	char *kcopy = kvs_malloc(strlen(key) + 1);
-	if (kcopy == NULL) return NULL;
+	if (kcopy == NULL) {
+		kvs_free(node);
+		return NULL;
+	}
 	memset(kcopy, 0, strlen(key) + 1);
 	strncpy(kcopy, key, strlen(key));
 
@@ -51,7 +54,8 @@ hashnode_t *_create_node(char *key, char *value) {
 
 	char *kvalue = kvs_malloc(strlen(value) + 1);
 	if (kvalue == NULL) { 
-		kvs_free(kvalue);
+		kvs_free(node);
+		kvs_free(kcopy);
 		return NULL;
 	}
 	memset(kvalue, 0, strlen(value) + 1);
@@ -97,13 +101,15 @@ void kvs_hash_destory(kvs_hash_t *hash) {
 			hashnode_t *tmp = node;
 			node = node->next;
 			hash->nodes[i] = node;
-			
+			kvs_free(tmp->key);
+			kvs_free(tmp->value);
 			kvs_free(tmp);
 			
 		}
 	}
 
 	kvs_free(hash->nodes);
+	hash->nodes = NULL;
 	
 }
 
@@ -127,6 +133,7 @@ int kvs_hash_set(kvs_hash_t *hash, char *key, char *value) {
 #endif
 
 	hashnode_t *new_node = _create_node(key, value);
+	if(!new_node) return -2;
 	new_node->next = hash->nodes[idx];
 	hash->nodes[idx] = new_node;
 	
@@ -179,11 +186,13 @@ int kvs_hash_mod(kvs_hash_t *hash, char *key, char *value) {
 		return 1;
 	}
 
-	// node --> 
-	kvs_free(node->value);
+
 
 	char *kvalue = kvs_malloc(strlen(value) + 1);
 	if (kvalue == NULL) return -2;
+		// node --> 
+	kvs_free(node->value);
+
 	memset(kvalue, 0, strlen(value) + 1);
 	strncpy(kvalue, value, strlen(value));
 
@@ -208,6 +217,8 @@ int kvs_hash_del(kvs_hash_t *hash, char *key) {
 		hashnode_t *tmp = head->next;
 		hash->nodes[idx] = tmp;
 		
+		kvs_free(head->key);
+		kvs_free(head->value);
 		kvs_free(head);
 		hash->count --;
 		
