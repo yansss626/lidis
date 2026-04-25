@@ -38,8 +38,9 @@ kvstore的主从增量同步基于ebpf：
 
 **软件**：
 ```bash
-sudo apt install -y \ 
-    clang llvm libbpf-dev libelf-dev zlib1g-dev \   linux-tools-generic gcc-multilib
+sudo apt install -y \
+    clang llvm libbpf-dev libelf-dev zlib1g-dev \
+    linux-tools-generic gcc-multilib
 ```
 
 
@@ -206,9 +207,9 @@ make
 编译后会生成多个可执行文件。    
 
 
-### test_function
+### basic_function
 ```bash
-./test_function <ip> <port>
+./basic_function <ip> <port>
 ```
     测试kvstore基本功能(SET/GET/MODE/DEL/EXIST)是否正常。
 
@@ -270,10 +271,10 @@ Linux内核版本：ubuntu 22.04.5  6.8.0-107-generic
 ![alt text](https://img.0voice.com/6780/a4423ce2f0defeff0f4a3ff649a89e9d.png)
 
 ### SET十万条数据（写性能）       
-![alt text](https://img.0voice.com/6780/4d4cfb3454c6726eee0117a74c25b2f3.png)
+![alt text](https://img.0voice.com/6780/3ab0edd5ed9c37de9b52407a9efc957f.png)
 
 ### GET十万条数据（读性能）
-![alt text](https://img.0voice.com/6780/9ce2132d78c66b185179e0aa1b56be32.png)
+![alt text](https://img.0voice.com/6780/4489fffdee1092e6b90bd23417d9b327.png)
 
 ### redis （写性能）
 
@@ -291,4 +292,5 @@ Linux内核版本：ubuntu 22.04.5  6.8.0-107-generic
 ### 主从同步写性能：
 
 SET十万条数据：
+![alt text](https://img.0voice.com/6780/639158ce309fb9de3501cdc507610c5c.png)
 
