@@ -1,6 +1,6 @@
 # 9.1 Kvstore：兼容resp协议的轻量级 Key-Value 存储系统
 
-## 编译与运行
+## 1.编译与运行
 
 ### 环境要求
 
@@ -64,7 +64,7 @@ make kvs-ebpf
 cd ..
 ```
 
-## 配置文件
+## 2.配置文件
 
 kvstore 通过 `conf/kvstore.conf` 配置运行参数，启动时自动读取。
 
@@ -107,7 +107,7 @@ kvstore 通过 `conf/kvstore.conf` 配置运行参数，启动时自动读取。
 
 
 
-## 协议指令（四种数据结构）
+## 3.协议指令（四种数据结构）
 
 ### 数组 （array）
 | 指令  | 参数  | 功能说明  | 成功响应  | 失败响应  |
@@ -149,7 +149,7 @@ kvstore 通过 `conf/kvstore.conf` 配置运行参数，启动时自动读取。
 ### SAVE指令 将当前内存数据持久化到磁盘文件
 
 
-## 核心功能模块
+## 4.核心功能模块
 
 ### 增量持久化 （AOF 机制）
 
@@ -193,7 +193,7 @@ sudo ./kvs-ebpf/kvs_agent
 ```
 
 
-## 测试方案
+## 5.测试方案
 
 `testcase_resp/` 目录提供了一系列基于 RESP 协议的测试客户端，用于验证 kvstore 各项功能。
 
@@ -259,7 +259,7 @@ make
 
 
 
-## Kvstore 性能
+## 6.Kvstore 性能
 
 虚拟机配置：
 ![虚拟机配置](https://img.0voice.com/6780/8ae9726839f2cc8abacb45d423f8d456.png)
@@ -289,5 +289,6 @@ redis （读性能）
 
 
 主从同步写性能：
+
 SET十万条数据：
 
