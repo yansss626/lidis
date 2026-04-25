@@ -458,18 +458,18 @@ void kvs_rbtree_destory(kvs_rbtree_t *inst) {
 	if (inst == NULL) return ;
 
 	rbtree_node *node = NULL;
-
-	while (!(node = inst->root)) {
-		
-		rbtree_node *mini = rbtree_mini(inst, node);
-		
+	while (inst->root != inst->nil) {
+		rbtree_node *mini = rbtree_mini(inst, inst->root);
 		rbtree_node *cur = rbtree_delete(inst, mini);
-		kvs_free(cur);
 		
+		
+		if (cur->key)   kvs_free(cur->key);
+		if (cur->value) kvs_free(cur->value);
+		kvs_free(cur);
 	}
-
 	kvs_free(inst->nil);
-
+	inst->nil = NULL;
+	inst->root = NULL;
 	return ;
 
 }
@@ -482,12 +482,19 @@ int kvs_rbtree_set(kvs_rbtree_t *inst, char *key, char *value) {
 	rbtree_node *node = (rbtree_node*)kvs_malloc(sizeof(rbtree_node));
 		
 	node->key = kvs_malloc(strlen(key) + 1);
-	if (!node->key) return -2;
+    if (!node->key) {
+        kvs_free(node);
+        return -2;
+    }
  	memset(node->key, 0, strlen(key) + 1);
 	strcpy(node->key, key);
 	
 	node->value = kvs_malloc(strlen(value) + 1);
-	if (!node->value) return -2;
+    if (!node->value) {
+        kvs_free(node->key);
+        kvs_free(node);
+        return -2;
+    }
 	memset(node->value, 0, strlen(value) + 1);
 	strcpy(node->value, value);
 
@@ -501,7 +508,6 @@ char* kvs_rbtree_get(kvs_rbtree_t *inst, char *key)  {
 
 	if (!inst || !key) return NULL;
 	rbtree_node *node = rbtree_search(inst, key);
-	if (!node) return NULL; // no exist
 	if (node == inst->nil) return NULL;
 
 	return node->value;
@@ -513,10 +519,12 @@ int kvs_rbtree_del(kvs_rbtree_t *inst, char *key) {
 	if (!inst || !key) return -1;
 
 	rbtree_node *node = rbtree_search(inst, key);
-	if (!node) return 1; // no exist
+	if (node == inst->nil) return 1; // no exist
 	
 	rbtree_node *cur = rbtree_delete(inst, node);
-	free(cur);
+    if (cur->key)   kvs_free(cur->key);
+    if (cur->value) kvs_free(cur->value);
+	kvs_free(cur);
 
 	return 0;
 }
@@ -526,7 +534,6 @@ int kvs_rbtree_mod(kvs_rbtree_t *inst, char *key, char *value) {
 	if (!inst || !key || !value) return -1;
 
 	rbtree_node *node = rbtree_search(inst, key);
-	if (!node) return 1; // no exist
 	if (node == inst->nil) return 1;
 	
 	kvs_free(node->value);
@@ -546,7 +553,6 @@ int kvs_rbtree_exist(kvs_rbtree_t *inst, char *key) {
 	if (!inst || !key) return -1;
 
 	rbtree_node *node = rbtree_search(inst, key);
-	if (!node) return 1; // no exist
 	if (node == inst->nil) return 1;
 
 	return 0;
