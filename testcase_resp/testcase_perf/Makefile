@@ -1,0 +1,29 @@
+CC = gcc 
+
+LDFLAGS = -lhiredis
+
+TESTCASE_GET_QPS = test_get_qps
+TESTCASE_GET_QPS_SRCS = test_get_qps.c
+
+TESTCASE_SET_QPS = test_set_qps
+TESTCASE_SET_QPS_SRCS = test_set_qps.c
+
+TESTCASE_SAVE_QPS = test_save_qps
+TESTCASE_SAVE_QPS_SRCS = test_save_qps.c
+
+
+
+all: $(TESTCASE_GET_QPS) $(TESTCASE_SET_QPS) $(TESTCASE_SAVE_QPS)
+
+
+$(TESTCASE_GET_QPS): $(TESTCASE_GET_QPS_SRCS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+$(TESTCASE_SET_QPS): $(TESTCASE_SET_QPS_SRCS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+$(TESTCASE_SAVE_QPS): $(TESTCASE_SAVE_QPS_SRCS)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+clean: 
+	rm -rf $(TESTCASE_SET_QPS) $(TESTCASE_GET_QPS) $(TESTCASE_SAVE_QPS)
