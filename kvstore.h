@@ -163,7 +163,7 @@ int kvs_rbtree_exist(kvs_rbtree_t *inst, char *key);
 
 #define MAX_KEY_LEN	128
 #define MAX_VALUE_LEN	512
-#define MAX_TABLE_SIZE	102400
+#define MAX_TABLE_SIZE	1000000
 
 #define ENABLE_KEY_POINTER	1
 
