@@ -61,7 +61,7 @@ make
 
 ```bash
 cd kvs-ebpf
-make kvs-ebpf
+make kvs_agent
 cd ..
 ```
 
