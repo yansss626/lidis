@@ -542,7 +542,7 @@ void kvs_deinit(){
 
 const char * configuation[] = {
 	"ENABLE_MODULE_SYNC", "ENABLE_MODULE_LOG", "ENABLE_MODULE_SAVE",
-	"Master_ip", "Master_port", "Mode", "Port", "Rdma_server_ip", "Rdma_port",
+	"Master_ip", "Master_port", "Mode", "Port", "Rdma_port",
 	"Agent_ip", "Agent_port",
 };
 enum kvs_conf_t{ // enum used for configutaion setup
@@ -558,7 +558,7 @@ enum kvs_conf_t{ // enum used for configutaion setup
 	KVS_MODE,
 	KVS_PORT,
 
-	KVS_RDMA_SERVER_IP,
+
 	KVS_RDMA_PORT,
 
 	KVS_AGENT_IP,
@@ -603,9 +603,6 @@ int kvs_config_init(kvs_conf_t *  conf){
 			break;
 		case KVS_PORT:
 			conf->port = atoi(value);
-			break;	
-		case KVS_RDMA_SERVER_IP:
-			strncpy(conf->rdma_server_ip, value, strlen(value) + 1);
 			break;	
 		case KVS_RDMA_PORT:
 			strncpy(conf->rdma_port, value, strlen(value) + 1) ;

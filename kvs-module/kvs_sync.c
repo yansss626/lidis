@@ -168,8 +168,15 @@ int kvs_full_sync(client_info * cli){
         ret = -5;
         goto cleanup;
     }
+
+    struct sockaddr_in peer_addr = {0};
+    socklen_t peer_len = sizeof(peer_addr);
+    getpeername(cli->fd, (struct sockaddr *)&peer_addr, &peer_len);
     
-    rdma_client(global_config.rdma_server_ip, global_config.rdma_port, ptr, statbuf.st_size);
+    char slave_ip[INET_ADDRSTRLEN] = {0};
+    inet_ntop(AF_INET, &peer_addr.sin_addr, slave_ip, INET_ADDRSTRLEN);
+    printf("slave_ip: %s\n", slave_ip);
+    rdma_client(slave_ip, global_config.rdma_port, ptr, statbuf.st_size);
 
 
     cleanup:
