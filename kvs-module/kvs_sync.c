@@ -45,7 +45,7 @@ int kvs_connect_to_sync(){
     int master_fd = -1;
     int agent_fd = -1;
     int ret = 0;
-    char * rdma_buf;
+    char * rdma_buf = NULL;
     int rdma_mod_size = 0; //rdma modified size
     int rdma_buf_size = 0;
     const char * master_ip = global_config.master_ip;
@@ -124,7 +124,7 @@ int kvs_full_sync(client_info * cli){
     int ret = 0;
     struct io_uring ring = {0};
     int fd = 0;
-    char * ptr;
+    char * ptr = NULL;
     if(io_uring_queue_init(ENTRY_LENGTH, &ring, 0) < 0){
         perror("io_uring_queue_init");
         ret = -2;
