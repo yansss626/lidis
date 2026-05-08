@@ -58,7 +58,6 @@ typedef struct kvs_conf_s
 	int master_port;
 	int mode;
 	int port;
-	char rdma_server_ip[IPV4_MAX_STR_LEN]; // ip for rdma communication    IPV4
 	char rdma_port[PORT_MAX_STR_LEN]; //port for rdma communiaction
 
 	char agent_ip[IPV4_MAX_STR_LEN]; // IPV4
