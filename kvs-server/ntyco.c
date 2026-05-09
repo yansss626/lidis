@@ -6,7 +6,7 @@
 #include "kvstore.h"
 #include <arpa/inet.h>
 
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 10240
 
 static msg_handler kvs_handler;
 
