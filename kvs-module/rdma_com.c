@@ -60,13 +60,13 @@ int rdma_client(const char * server_ip, const char * port, char * ptr, size_t si
     }
 
 
-
+    int connected = 0;  // 
     if(rdma_connect(id, NULL) != 0){
         perror("rdma_connect"); 
         ret = -2;;
         goto cleanup;           
     }
-   
+    connected = 1; // connect success
     if(id->event == NULL || id->event->param.conn.private_data_len < sizeof(struct pdata)){
         fprintf(stderr, "There is no private data from server\n");
         ret = -3;
@@ -129,14 +129,14 @@ int rdma_client(const char * server_ip, const char * port, char * ptr, size_t si
     cleanup:
 
         if(res != NULL)rdma_freeaddrinfo(res);
-        if(id != NULL) rdma_disconnect(id);
+        if(connected) rdma_disconnect(id);  
         if(send_mr != NULL) ibv_dereg_mr(send_mr);
         if(mr != NULL) ibv_dereg_mr(mr);
         if(id != NULL) rdma_destroy_ep(id);
         return ret;
 }
 
-#define RDMA_BUFFER_SIZE 64*1024*1024    // 64MB
+
 
 int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd){
     if(port == NULL || rdma_buf == NULL || size <= 0) return -1;
@@ -183,13 +183,13 @@ int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd){
     char * info = "+READY";
     send(sockfd, info, strlen(info) + 1, 0);
 
-
+    int get_request = 0;
     if(rdma_get_request(listen_id, &id) != 0){
         perror("rdma_get_request");
         ret = -2;
         goto cleanup;
     }
-    
+    get_request = 1;
     mr = ibv_reg_mr(id->pd, rdma_buf, size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
     if(mr == NULL){
         perror("ibv_reg_mr");
@@ -243,7 +243,7 @@ int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd){
 
     cleanup:        
         if(res != NULL)rdma_freeaddrinfo(res);
-        if(id != NULL) rdma_disconnect(id);
+        if(get_request) rdma_disconnect(id);  
         if(recv_mr != NULL) ibv_dereg_mr(recv_mr);
         if(mr != NULL) ibv_dereg_mr(mr);
         if(id != NULL) rdma_destroy_ep(id);
