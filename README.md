@@ -267,30 +267,54 @@ make
 
 Linux内核版本：ubuntu 22.04.5  6.8.0-107-generic
 
-### echo服务器 单线程 echo十万条数据（测试了三次）
-![alt text](https://img.0voice.com/6780/a4423ce2f0defeff0f4a3ff649a89e9d.png)
+### 全量持久化性能
 
-### SET十万条数据（写性能）       
-![alt text](https://img.0voice.com/6780/3ab0edd5ed9c37de9b52407a9efc957f.png)
+每个数据结构单独插入100万条数据：
 
-### GET十万条数据（读性能）
-![alt text](https://img.0voice.com/6780/4489fffdee1092e6b90bd23417d9b327.png)
+![全量持久化性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['1k/次','1w/次','10w/次','100w/次'],datasets:[{label:'红黑树',data:[130,1207,3429,3105]},{label:'跳表',data:[142,1029,4424,3094]},{label:'哈希',data:[111,626,1072,1219]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'SAVE%20间隔'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'}}]}}})
 
-### redis （写性能）
+### Kvstore性能对比
 
-哈希：![alt text](https://img.0voice.com/6780/cf34e7966ef5ef4f1eafa857204abfa6.png)![alt text](https://img.0voice.com/6780/1ae40b1223f30ce6e54826b0ceebc1b3.png)
+#### 读（GET），写（SET）性能对比
 
-跳表：![alt text](https://img.0voice.com/6780/6b4b313b742cf150fc5dbb8392528bc2.png)![alt text](https://img.0voice.com/6780/eb416bb601813f9deaa987ab14d49bd8.png)
+每个数据结构单独插入10万条数据：
 
-### redis （读性能）
- 
-哈希：![alt text](https://img.0voice.com/6780/16537ec75f1ce96e4e8862a47fa4d971.png) ![alt text](https://img.0voice.com/6780/b84e311895eff603f177b0a5bcdfdb35.png)
+![哈希的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['关闭%20AOF(SET)','关闭%20AOF(GET)','开启%20AOF(SET)','开启%20AOF(GET)'],datasets:[{label:'echo服务器',data:[3400,3400,3400,3400]},{label:'redis',data:[2839,2863,2829,2661]},{label:'kvstore',data:[2782,2878,2883,2896]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'哈希'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
 
-跳表：![alt text](https://img.0voice.com/6780/a8e85fbebfda7b70a61255ada54da5e7.png) ![alt text](https://img.0voice.com/6780/72137bdbb810f754becb300caefac4e7.png)
+![跳表的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['关闭%20AOF(SET)','关闭%20AOF(GET)','开启%20AOF(SET)','开启%20AOF(GET)'],datasets:[{label:'echo服务器',data:[3400,3400,3400,3400]},{label:'redis',data:[3109,3148,3002,3050]},{label:'kvstore',data:[3270,3200,3205,3290]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'跳表'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
 
+![红黑树的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['关闭%20AOF(SET)','关闭%20AOF(GET)','开启%20AOF(SET)','开启%20AOF(GET)'],datasets:[{label:'echo服务器',data:[3400,3400,3400,3400]},{label:'kvstore',data:[3087,3173,3054,3307]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'红黑树'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
 
-### 主从同步写性能：
+#### 批量处理性能对比
 
-SET十万条数据：
-![alt text](https://img.0voice.com/6780/639158ce309fb9de3501cdc507610c5c.png)
+每个数据结构单独插入10万条数据：
 
+![哈希批量处理性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['10','20','40','80','160'],datasets:[{label:'redis',data:[29180,51519,97751,168350,273224]},{label:'kvstore',data:[13506,18765,21654,28793,31084]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'哈希：批量处理（条）'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
+
+![跳表批量处理性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['10','20','40','80','160'],datasets:[{label:'redis',data:[28943,49504,83472,125944,176056]},{label:'kvstore',data:[27909,59844,105042,177619,254452]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'跳表：批量处理（条）'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
+
+![红黑树批量处理性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['10','20','40','80','160'],datasets:[{label:'kvstore',data:[31176,62617,111856,182481,285714]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'红黑树：批量处理（条）'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
+
+#### 主从同步性能对比
+
+每个数据结构单独插入10万条数据：
+
+##### 实时数据同步的性能：
+
+![实时数据同步性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['红黑树','跳表','哈希'],datasets:[{label:'关闭主从同步',data:[3087,3270,2782]},{label:'开启主从同步（ebpf%20转发）',data:[1814,1812,1528]},{label:'开启主从同步（send%20转发）',data:[2291,2464,2158]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'数据结构'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
+
+##### 已有数据同步的性能：
+
+![已有数据同步性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['Rdma','Sendfile'],datasets:[{label:'文件大小（102.3MB）',data:[23.06,41.15]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:''}}],yAxes:[{scaleLabel:{display:true,labelString:'传输速度（MB/s）'},ticks:{beginAtZero:true}}]}}})
+
+#### 内存池性能对比
+
+开始：启动 Kvstore 时的虚拟内存/物理内存
+
+峰值：插入一百万条数据后的虚拟内存/物理内存
+
+结束：清空一百万条数据后的虚拟内存/物理内存
+
+![内存池（虚拟内存）的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['开始','峰值','结束'],datasets:[{label:'无内存池',data:[27756,152760,152760]},{label:'有内存池',data:[27760,99588,99672]},{label:'jemalloc',data:[48856,136920,136920]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'虚拟内存（VIRT）对比'}}],yAxes:[{scaleLabel:{display:true,labelString:'虚拟内存（KB）'},ticks:{beginAtZero:true}}]}}})
+
+![内存池（物理内存）的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['开始','峰值','结束'],datasets:[{label:'无内存池',data:[2540,127560,127560]},{label:'有内存池',data:[2548,74452,74580]},{label:'jemalloc',data:[4904,84644,6884]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'物理内存（RES）对比'}}],yAxes:[{scaleLabel:{display:true,labelString:'物理内存（KB）'},ticks:{beginAtZero:true}}]}}})
