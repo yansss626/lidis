@@ -257,11 +257,11 @@ void kvs_free(void *ptr);
 	#define BLOCK_FLAG_LARGE 1
 	#define BLOCK_FLAG 0
 
-	#define CLASS_COUNT 31
+	#define CLASS_COUNT 29
 
 
 	static size_t size_classes[] = {
-		8, 16, 32, 48, 56, 64, 72, 80, 
+		32, 48, 56, 64, 72, 80, 
 		96, 112, 128,  
 		160, 192, 224, 256,
 		320, 384, 448, 512,
