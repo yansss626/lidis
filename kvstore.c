@@ -25,14 +25,24 @@ extern kvs_skiplist_t global_skiplist;
 #define BUFFER_SIZE 1024
 
 
-
+#if MEM_POOL 
+extern kvs_mempool_t pools;
+#endif
 
 void *kvs_malloc(size_t size) {
+#if MEM_POOL 
+	return mp_malloc(&pools, size);
+#else
 	return malloc(size);
+#endif
 }
 
 void kvs_free(void *ptr) {
+#if MEM_POOL 
+	return mp_free(&pools, ptr);
+#else
 	return free(ptr);
+#endif
 }
 
 
@@ -529,6 +539,9 @@ void dest_kvengine(void) {
 
 void kvs_init(){
 	kvs_config_init	(&global_config);
+#if MEM_POOL 
+	mp_create(&pools);
+#endif
 	init_kvengine();
 	kvs_save_init(kvs_protocol);
 	kvs_log_init(kvs_protocol);
@@ -538,6 +551,9 @@ void kvs_deinit(){
 	dest_kvengine();
 	kvs_log_close();
 	kvs_save_close();
+#if MEM_POO
+	mp_destroy(&pools);
+#endif
 }
 
 const char * configuation[] = {
