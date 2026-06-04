@@ -6,7 +6,7 @@
 #include "kvstore.h"
 #include <arpa/inet.h>
 
-#define BUFFER_SIZE 10240
+#define BUFFER_SIZE 1024*1024 // 1MB
 
 static msg_handler kvs_handler;
 
@@ -77,23 +77,23 @@ int kvs_recv_protocol(client_info * cli_info, int * head_len){
 
 
 client_info * client_info_init(int fd){
-	client_info * cli_info = (client_info *)malloc(sizeof(client_info));
+	client_info * cli_info = (client_info *)kvs_malloc(sizeof(client_info));
 	if(cli_info == NULL) return NULL;
 	memset(cli_info, 0, sizeof(client_info));
 
-	cli_info->rbuf = (char *)malloc(BUFFER_SIZE + 1);
+	cli_info->rbuf = (char *)kvs_malloc(BUFFER_SIZE + 1);
 	if(cli_info->rbuf == NULL){
-		free(cli_info);
+		kvs_free(cli_info);
 		return NULL;
 	}
 	cli_info->r_cap = BUFFER_SIZE;
 	memset(cli_info->rbuf, 0, BUFFER_SIZE + 1);
 
 
-	cli_info->wbuf = (char *)malloc(BUFFER_SIZE + 1);
+	cli_info->wbuf = (char *)kvs_malloc(BUFFER_SIZE + 1);
 	if(cli_info->wbuf == NULL){
-		free(cli_info);
-		free(cli_info->rbuf);
+		kvs_free(cli_info);
+		kvs_free(cli_info->rbuf);
 		return NULL;
 	}
 	cli_info->w_cap = BUFFER_SIZE;
@@ -128,9 +128,9 @@ void echo_server(void *arg) {
 
 		cleanup:
 		close(cli_info->fd);
-		if(cli_info->rbuf != NULL) free(cli_info->rbuf);
-		if(cli_info->wbuf != NULL) free(cli_info->wbuf);
-		free(cli_info);
+		if(cli_info->rbuf != NULL) kvs_free(cli_info->rbuf);
+		if(cli_info->wbuf != NULL) kvs_free(cli_info->wbuf);
+		kvs_free(cli_info);
 		cli_info = NULL;
 
 }
@@ -211,9 +211,9 @@ void server_reader(void *arg) {
 		}
 		cleanup:
 		close(cli_info->fd);
-		if(cli_info->rbuf != NULL) free(cli_info->rbuf);
-		if(cli_info->wbuf != NULL) free(cli_info->wbuf);
-		free(cli_info);
+		if(cli_info->rbuf != NULL) kvs_free(cli_info->rbuf);
+		if(cli_info->wbuf != NULL) kvs_free(cli_info->wbuf);
+		kvs_free(cli_info);
 		cli_info = NULL;
 
 }
