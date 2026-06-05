@@ -241,7 +241,7 @@ static void * block_with_header(kvs_mempool_t * pools, size_t size) {
     header->flag = BLOCK_FLAG;
     header->slab = slab;
     header->magic = BLOCK_MAGIC;
-    
+    header->size = size_classes[class_id];
     slab->free_blocks--;
 
     if (slab->free_blocks == 0) {
@@ -281,7 +281,8 @@ static void * block_without_header(kvs_mempool_t * pools, size_t size) {
 
 
 void * mp_malloc(kvs_mempool_t * pools, size_t size) {
-    if (pools == NULL) return NULL;
+    if (pools == NULL || size == 0) return NULL;
+        
     
     // small block without header
     if (ALIGN_UP(size) <= ALIGNMENT_THRESHOLD) {
@@ -298,7 +299,7 @@ void * mp_malloc(kvs_mempool_t * pools, size_t size) {
         large_header->flag = BLOCK_FLAG_LARGE;
         large_header->magic = BLOCK_MAGIC;
         large_header->slab = NULL;
-
+        large_header->size = size;
         return (void *)(large_header + 1);
     }
 
@@ -392,6 +393,52 @@ void mp_free(kvs_mempool_t * pools, void * ptr) {
 
     
 }
+
+void * mp_realloc(kvs_mempool_t * pools, void * ptr, size_t size) {
+    if (pools == NULL) return NULL;
+    if (ptr == NULL) return mp_malloc(pools, size);
+    if (size == 0) {
+        mp_free(pools, ptr);
+        return NULL;
+    }
+
+    size_t old_capacity = 0;
+
+    block_header_t * header = ((block_header_t *)ptr - 1);
+
+    if (header->magic == BLOCK_MAGIC) {
+        if (header->flag == BLOCK_FLAG_LARGE) {
+            old_capacity = header->size;
+        }
+        else {
+            if (header->class_id < 0 || header->class_id >= CLASS_COUNT || header->slab == NULL || header->slab->mem == NULL) {
+                return NULL;
+            }
+            old_capacity = header->size;
+        }
+    }
+    else {
+        slab_t * slab = ptr_to_slab(ptr);
+        if (slab != NULL && slab->slab_magic == SLAB_MAGIC) {
+            old_capacity = size_classes[slab->classid];
+        }
+        else {
+            return NULL;
+        }
+    }
+    if (size <= old_capacity) return ptr;
+
+    
+    void * new_ptr = mp_malloc(pools, size);
+    if (new_ptr == NULL) return NULL;
+
+    memcpy(new_ptr, ptr, old_capacity);
+
+    mp_free(pools, ptr);
+
+    return new_ptr;
+}
+
 
 
 
