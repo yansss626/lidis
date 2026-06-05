@@ -1,12 +1,9 @@
-
-
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <pthread.h>
-
-
+#include <stdint.h>
+#define XXH_INLINE_ALL 
+#include "xxhash.h"
 #include "kvstore.h"
 
 
@@ -20,19 +17,88 @@ kvs_hash_t global_hash;
 
 //Connection 
 // 'C' + 'o' + 'n'
+
+// 
+static inline uint32_t rotl32(uint32_t x, int8_t r) {
+    return (x << r) | (x >> (32 - r));
+}
+
+// MurmurHash3 
+static uint32_t MurmurHash3_x86_32(const void *key, int len, uint32_t seed) {
+    const uint8_t *data = (const uint8_t*)key;
+    const int nblocks = len / 4;
+
+    uint32_t h1 = seed;
+    const uint32_t c1 = 0xcc9e2d51;
+    const uint32_t c2 = 0x1b873593;
+
+    // 1. 
+    const uint32_t *blocks = (const uint32_t *)(data + nblocks * 4);
+    for(int i = -nblocks; i; i++) {
+        uint32_t k1 = blocks[i];
+
+        k1 *= c1;
+        k1 = rotl32(k1, 15);
+        k1 *= c2;
+
+        h1 ^= k1;
+        h1 = rotl32(h1, 13);
+        h1 = h1 * 5 + 0xe6546b64;
+    }
+
+    // 2. 
+    const uint8_t *tail = (const uint8_t*)(data + nblocks * 4);
+    uint32_t k1 = 0;
+
+    switch(len & 3) {
+    case 3: k1 ^= tail[2] << 16;
+    case 2: k1 ^= tail[1] << 8;
+    case 1: k1 ^= tail[0];
+            k1 *= c1; 
+            k1 = rotl32(k1, 15); 
+            k1 *= c2; 
+            h1 ^= k1;
+    };
+
+    // 3. fmix
+    h1 ^= len;
+    h1 ^= h1 >> 16;
+    h1 *= 0x85ebca6b;
+    h1 ^= h1 >> 13;
+    h1 *= 0xc2b2ae35;
+    h1 ^= h1 >> 16;
+
+    return h1;
+}
+
 static int _hash(char *key, int size) {
 
 	if (!key) return -1;
 
-	int sum = 0;
-	int i = 0;
 
-	while (key[i] != 0) {
-		sum += key[i];
-		i ++;
-	}
+    // uint32_t seed = 0x9747b28c; 
+    
+    // // MurmurHash3
+    // uint32_t hash_value = MurmurHash3_x86_32(key, strlen(key), seed);
+    // return hash_value % size;	
 
-	return abs(sum % size);
+	// xxhash
+	uint64_t hash_value = XXH3_64bits(key, strlen(key));
+
+    // 
+	return (int)(hash_value % (uint64_t)size);
+
+	// // FNV-1a
+	// uint32_t hash = 2166136261U;
+	// int i = 0;
+
+	// while (key[i] != 0) {
+	// 	hash ^= (uint8_t)key[i];
+	// 	hash *= 16777619U;
+	// 	i++;
+	// }
+
+	// return (int)(hash % size);
 
 }
 
@@ -116,6 +182,7 @@ void kvs_hash_destory(kvs_hash_t *hash) {
 // 5 + 2
 
 // mp
+int count = 0;
 int kvs_hash_set(kvs_hash_t *hash, char *key, char *value) {
 
 	if (!hash || !key || !value) return -1;
