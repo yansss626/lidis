@@ -103,9 +103,9 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
     int ret = 0;
 
 
-    io_write_ctx * ctx = (io_write_ctx *)malloc(sizeof(io_write_ctx));
+    io_write_ctx * ctx = (io_write_ctx *)kvs_malloc(sizeof(io_write_ctx));
     if(ctx == NULL) {
-        perror("malloc error");
+        perror("kvs_malloc error");
         ret = -2;
         goto cleanup;
     }
@@ -145,10 +145,10 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
     // 固定开销：*3\r\n + 三个$的bulk头 + 三个\r\n末尾 + length所占字节长度， 保险给64
     int max_len = 64 + kstr_len + vstr_len + engine_len;
     
-    ctx->buf = (char *)malloc(max_len);
+    ctx->buf = (char *)kvs_malloc(max_len);
     if(ctx->buf == NULL){
         ret = -2;
-        perror("malloc error");
+        perror("kvs_malloc error");
         goto cleanup;
     }
     
@@ -164,8 +164,8 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
     for(int i = 0; i < nready; i++){
         struct io_uring_cqe * cqe = cqes[i];
         io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
-        free(ctx->buf);
-        free(ctx);
+        kvs_free(ctx->buf);
+        kvs_free(ctx);
         --main_ctx->tasks_count;
     }
     io_uring_cq_advance(main_ctx->ring, nready);
@@ -184,8 +184,8 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
     return 0;
     cleanup:
         if(ctx != NULL){
-            free(ctx->buf);
-            free(ctx);
+            kvs_free(ctx->buf);
+            kvs_free(ctx);
         }
         return ret;
 }
@@ -275,8 +275,8 @@ int kvs_traversal_write(int fd, io_write_ctx * main_ctx){
     if(main_ctx->tasks_count != 0){
         while(io_uring_wait_cqe(main_ctx->ring, &cqe) == 0){
             io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
-            free(ctx->buf);
-            free(ctx);
+            kvs_free(ctx->buf);
+            kvs_free(ctx);
             io_uring_cqe_seen(main_ctx->ring, cqe);
             --main_ctx->tasks_count;
             if(main_ctx->tasks_count == 0) break;

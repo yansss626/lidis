@@ -45,6 +45,14 @@ void kvs_free(void *ptr) {
 #endif
 }
 
+void * kvs_realloc(void *ptr, size_t size) {
+#if MEM_POOL 
+	return mp_realloc(&pools, ptr, size);
+#else
+	return realloc(ptr, size);
+#endif
+}
+
 
 const char *command[] = {
 	"SET", "GET", "DEL", "MOD", "EXIST",
@@ -166,9 +174,9 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	char * result = NULL;
 	int is_write_success = 0;
 	if(cli->w_cap - cli->w_pos < 32){
-			char * temp = (char *)realloc(cli->wbuf, cli->w_cap * 2);
+			char * temp = (char *)kvs_realloc(cli->wbuf, cli->w_cap * 2);
 			if(temp == NULL) {
-				perror("realloc error");
+				perror("kvs_realloc error");
 				return -1;
 			}
 			cli->wbuf = temp;
@@ -432,9 +440,9 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		int rlen = strlen(result);// $len\r\nvalue\r\n
 		int needed = rlen + 15; // "$" + 最多10位数字 + "\r\n" + value + "\r\n"
 		if(needed > cli->w_cap - cli->w_pos){  
-			char * temp = (char *)realloc(cli->wbuf, cli->w_cap + needed + 1);
+			char * temp = (char *)kvs_realloc(cli->wbuf, cli->w_cap + needed + 1);
 			if(temp == NULL) {
-				perror("realloc error");
+				perror("kvs_realloc error");
 				return -1;
 			}
 			cli->wbuf = temp;

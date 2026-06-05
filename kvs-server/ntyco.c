@@ -6,7 +6,7 @@
 #include "kvstore.h"
 #include <arpa/inet.h>
 
-#define BUFFER_SIZE 1024*1024 // 1MB
+#define BUFFER_SIZE 1024 // 1KB
 
 static msg_handler kvs_handler;
 
@@ -131,9 +131,9 @@ void echo_server(void *arg) {
 cleanup:
     printf("client close fd: %d\n", cli_info->fd);
     close(cli_info->fd);
-    if(cli_info->rbuf != NULL) free(cli_info->rbuf);
-    if(cli_info->wbuf != NULL) free(cli_info->wbuf);
-    free(cli_info);
+    if(cli_info->rbuf != NULL) kvs_free(cli_info->rbuf);
+    if(cli_info->wbuf != NULL) kvs_free(cli_info->wbuf);
+    kvs_free(cli_info);
 }
 
 
@@ -142,9 +142,9 @@ void server_reader(void *arg) {
 		int ret = 0;
 		while(1){
 			if(cli_info->r_pos >= cli_info->r_cap) {
-				char * temp = (char *)realloc(cli_info->rbuf, 2 * cli_info->r_cap + 1);
+				char * temp = (char *)kvs_realloc(cli_info->rbuf, 2 * cli_info->r_cap + 1);
                 if(temp == NULL) {
-                    perror("realloc error");
+                    perror("kvs_realloc error");
                     break;
                 }
                 cli_info->rbuf = temp;
@@ -167,9 +167,9 @@ void server_reader(void *arg) {
 				if(total_len == 0) break;
 				if(total_len < 0){
 					if(cli_info->w_cap - cli_info->w_pos < 22){
-							char * temp = (char *)realloc(cli_info->wbuf, cli_info->w_cap + 23);
+							char * temp = (char *)kvs_realloc(cli_info->wbuf, cli_info->w_cap + 23);
 							if(temp == NULL) {
-								perror("realloc error");
+								perror("kvs_realloc error");
 								goto cleanup;
 							}
 							cli_info->wbuf = temp;

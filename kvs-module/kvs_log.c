@@ -33,13 +33,13 @@ int kvs_file_read(char * ptr, size_t size, msg_handler handler){
     client_info cli = {0};
 
     cli.w_cap = BUFFER_SIZE; 
-    cli.wbuf = (char *)malloc(BUFFER_SIZE + 1);
+    cli.wbuf = (char *)kvs_malloc(BUFFER_SIZE + 1);
     if(cli.wbuf == NULL) return -2;
 
     cli.r_cap = BUFFER_SIZE; 
-    cli.rbuf = (char *)malloc(BUFFER_SIZE + 1);
+    cli.rbuf = (char *)kvs_malloc(BUFFER_SIZE + 1);
     if(cli.rbuf == NULL) {
-        free(cli.wbuf);
+        kvs_free(cli.wbuf);
         return -2;
     }
 
@@ -55,7 +55,7 @@ int kvs_file_read(char * ptr, size_t size, msg_handler handler){
             break;
         }
         if(total_len > cli.r_cap){
-            char * temp = (char *)realloc(cli.rbuf, total_len + 1);
+            char * temp = (char *)kvs_realloc(cli.rbuf, total_len + 1);
             if(temp == NULL){
                 break;
             }
@@ -73,8 +73,8 @@ int kvs_file_read(char * ptr, size_t size, msg_handler handler){
 
     }
 
-    free(cli.rbuf);
-    free(cli.wbuf);
+    kvs_free(cli.rbuf);
+    kvs_free(cli.wbuf);
 
     return 0;
 }
@@ -123,8 +123,8 @@ int kvs_log_write(client_info * cli){
     
     while(io_uring_peek_cqe(&ring_log, &cqe) == 0){
         io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
-        free(ctx->buf);
-        free(ctx);
+        kvs_free(ctx->buf);
+        kvs_free(ctx);
         ctx = NULL;
         io_uring_cqe_seen(&ring_log, cqe);
     }
@@ -134,15 +134,15 @@ int kvs_log_write(client_info * cli){
         io_uring_submit(&ring_log);
         return -4;
     }
-    io_write_ctx * ctx = (io_write_ctx *)malloc(sizeof(io_write_ctx));
+    io_write_ctx * ctx = (io_write_ctx *)kvs_malloc(sizeof(io_write_ctx));
     if(ctx == NULL){
-        perror("malloc");
+        perror("kvs_malloc");
         return -3;
     }
-    ctx->buf = (char *)malloc(cli->cmd_tl);
+    ctx->buf = (char *)kvs_malloc(cli->cmd_tl);
     if(ctx->buf == NULL){
-        perror("malloc");
-        free(ctx);
+        perror("kvs_malloc");
+        kvs_free(ctx);
         return -3;
     }
     
@@ -166,8 +166,8 @@ int kvs_log_close(){
         struct io_uring_cqe * cqe = NULL;
         while(io_uring_peek_cqe(&ring_log, &cqe) == 0){
             io_write_ctx * ctx = io_uring_cqe_get_data(cqe);
-            free(ctx->buf);
-            free(ctx);
+            kvs_free(ctx->buf);
+            kvs_free(ctx);
             ctx = NULL;
             io_uring_cqe_seen(&ring_log, cqe);
         }        
