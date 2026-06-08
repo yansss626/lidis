@@ -297,17 +297,29 @@ Linux内核版本：ubuntu 22.04.5  6.8.0-107-generic
 
 #### 主从同步性能对比
 
-每个数据结构单独插入10万条数据：
-
 ##### 实时数据同步的性能：
 
-![实时数据同步性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['红黑树','跳表','哈希'],datasets:[{label:'关闭主从同步',data:[3087,3270,2782]},{label:'开启主从同步（ebpf%20转发）',data:[1814,1812,1528]},{label:'开启主从同步（send%20转发）',data:[2291,2464,2158]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'数据结构'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
+测试数据基于哈希：十万条数据
+
+| 实现方案 \ 性能指标 | qps |
+| :--- | :---: |
+| **关闭主从同步** | 3334 |
+| **uprobe** | 4684 |
+| **探测TCP的recv** | 5722 |
+| **网络send转发** | 2485 |
+
 
 ##### 已有数据同步的性能：
 
-![已有数据同步性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['Rdma','Sendfile'],datasets:[{label:'文件大小（102.3MB）',data:[23.06,41.15]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:''}}],yAxes:[{scaleLabel:{display:true,labelString:'传输速度（MB/s）'},ticks:{beginAtZero:true}}]}}})
+文件大小：1.03GB
 
-#### 内存池性能对比
+| 实现方案 \ 性能指标 | 传输速度 (MB/s) | 网络吞吐量 (Mbps) |
+| :--- | :---: | :---: |
+| **Iperf3** | 38.80 | 310.40 |
+| **Sendfile** | 26.37 | 210.96 |
+| **RDMA** | 19.57 | 156.56 |
+
+#### 内存分配方案性能对比
 
 开始：启动 Kvstore 时的虚拟内存/物理内存
 
@@ -315,6 +327,16 @@ Linux内核版本：ubuntu 22.04.5  6.8.0-107-generic
 
 结束：清空一百万条数据后的虚拟内存/物理内存
 
-![内存池（虚拟内存）的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['开始','峰值','结束'],datasets:[{label:'无内存池',data:[27756,152760,152760]},{label:'有内存池',data:[27760,99588,99672]},{label:'jemalloc',data:[48856,136920,136920]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'虚拟内存（VIRT）对比'}}],yAxes:[{scaleLabel:{display:true,labelString:'虚拟内存（KB）'},ticks:{beginAtZero:true}}]}}})
 
-![内存池（物理内存）的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['开始','峰值','结束'],datasets:[{label:'无内存池',data:[2540,127560,127560]},{label:'有内存池',data:[2548,74452,74580]},{label:'jemalloc',data:[4904,84644,6884]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'物理内存（RES）对比'}}],yAxes:[{scaleLabel:{display:true,labelString:'物理内存（KB）'},ticks:{beginAtZero:true}}]}}})
+| 分配方案 \ 虚拟内存 (KB) | 开始  | 峰值  | 结束  |
+| :--- | :---: | :---: | :---: |
+| **系统默认 malloc** | 27756 | 152760 | 27788 |
+| **jemalloc** | 48856 | 136920 | 136920 |
+| **自定义内存池** | 28084 | 106548 | 28600 |
+
+
+| 分配方案 \ 物理内存 (KB) | 开始  | 峰值  | 结束  |
+| :--- | :---: | :---: | :---: |
+| **系统默认 malloc** | 2540 | 127560 | 2716 |
+| **jemalloc** | 4904 | 84644 | 6884 |
+| **自定义内存池** | 2856 | 81320 | 3496 |
