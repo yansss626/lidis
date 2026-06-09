@@ -38,6 +38,7 @@ void rbtree_testcase(redisContext *c, int count) {
         snprintf(casename, BUFFER_SIZE, "RSET Teacher%d King%d", i, i);
         testcase(c, casename, "OK", casename);
     }
+    testcase(c, "SAVE", "OK", "SAVE");
 }
 void array_testcase(redisContext *c, int count) {
     for (int i = 0; i < count; i++) {
@@ -45,6 +46,7 @@ void array_testcase(redisContext *c, int count) {
         snprintf(casename, BUFFER_SIZE, "SET Teacher%d King%d", i, i);
         testcase(c, casename, "OK", casename);
     }
+    testcase(c, "SAVE", "OK", "SAVE");
 }
 void hash_testcase(redisContext *c, int count) {
     for (int i = 0; i < count; i++) {
@@ -52,6 +54,7 @@ void hash_testcase(redisContext *c, int count) {
         snprintf(casename, BUFFER_SIZE, "HSET Teacher%d King%d", i, i);
         testcase(c, casename, "OK", casename);
     }
+    testcase(c, "SAVE", "OK", "SAVE");
 }
 void skiplist_testcase(redisContext *c, int count) {
     for (int i = 0; i < count; i++) {
@@ -59,6 +62,7 @@ void skiplist_testcase(redisContext *c, int count) {
         snprintf(casename, BUFFER_SIZE, "LSET Teacher%d King%d", i, i);
         testcase(c, casename, "OK", casename);
     }
+    testcase(c, "SAVE", "OK", "SAVE");
 }
 
 void testcase_all(redisContext *c, int count){
