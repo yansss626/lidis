@@ -277,23 +277,21 @@ Linux内核版本：ubuntu 22.04.5  6.8.0-107-generic
 
 #### 读（GET），写（SET）性能对比
 
-每个数据结构单独插入10万条数据：
+测试数据基于哈希：十万条数据
 
-![哈希的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['关闭%20AOF(SET)','关闭%20AOF(GET)','开启%20AOF(SET)','开启%20AOF(GET)'],datasets:[{label:'echo服务器',data:[3400,3400,3400,3400]},{label:'redis',data:[2839,2863,2829,2661]},{label:'kvstore',data:[2782,2878,2883,2896]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'哈希'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
+**性能指标：qps**  
 
-![跳表的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['关闭%20AOF(SET)','关闭%20AOF(GET)','开启%20AOF(SET)','开启%20AOF(GET)'],datasets:[{label:'echo服务器',data:[3400,3400,3400,3400]},{label:'redis',data:[3109,3148,3002,3050]},{label:'kvstore',data:[3270,3200,3205,3290]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'跳表'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
+**echo服务器：3324**
 
-![红黑树的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['关闭%20AOF(SET)','关闭%20AOF(GET)','开启%20AOF(SET)','开启%20AOF(GET)'],datasets:[{label:'echo服务器',data:[3400,3400,3400,3400]},{label:'kvstore',data:[3087,3173,3054,3307]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'红黑树'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
+| 测试条件 \ 测试对象 | redis | kvstore |
+| :--- | :---: |  :---: |
+| **关闭AOF（写性能）** | 3097 | 3272 |
+| **关闭AOF（读性能）** | 3188 | 3244 |
+| **开启AOF（写性能）** | 2953 | 3208 |
+| **开启AOF（读性能）** | 3004 | 3260 |
 
 #### 批量处理性能对比
 
-每个数据结构单独插入10万条数据：
-
-![哈希批量处理性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['10','20','40','80','160'],datasets:[{label:'redis',data:[29180,51519,97751,168350,273224]},{label:'kvstore',data:[13506,18765,21654,28793,31084]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'哈希：批量处理（条）'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
-
-![跳表批量处理性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['10','20','40','80','160'],datasets:[{label:'redis',data:[28943,49504,83472,125944,176056]},{label:'kvstore',data:[27909,59844,105042,177619,254452]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'跳表：批量处理（条）'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
-
-![红黑树批量处理性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['10','20','40','80','160'],datasets:[{label:'kvstore',data:[31176,62617,111856,182481,285714]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'红黑树：批量处理（条）'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'},ticks:{beginAtZero:true}}]}}})
 
 #### 主从同步性能对比
 
@@ -301,19 +299,19 @@ Linux内核版本：ubuntu 22.04.5  6.8.0-107-generic
 
 测试数据基于哈希：十万条数据
 
-| 实现方案 \ 性能指标 | qps |
+| 测试条件 \ 性能指标 | qps |
 | :--- | :---: |
 | **关闭主从同步** | 3334 |
-| **uprobe** | 4684 |
-| **探测TCP的recv** | 5722 |
-| **网络send转发** | 2485 |
+| **开启主从同步：uprobe** | 4684 |
+| **开启主从同步：探测TCP的recv** | 5722 |
+| **开启主从同步：网络send转发** | 2485 |
 
 
 ##### 已有数据同步的性能：
 
 文件大小：1.03GB
 
-| 实现方案 \ 性能指标 | 传输速度 (MB/s) | 网络吞吐量 (Mbps) |
+| 测试方法 \ 性能指标 | 传输速度 (MB/s) | 网络吞吐量 (Mbps) |
 | :--- | :---: | :---: |
 | **Iperf3** | 38.80 | 310.40 |
 | **Sendfile** | 26.37 | 210.96 |
