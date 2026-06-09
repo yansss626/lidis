@@ -269,9 +269,16 @@ Linux内核版本：ubuntu 22.04.5  6.8.0-107-generic
 
 ### 全量持久化性能
 
-每个数据结构单独插入100万条数据：
+测试数据基于哈希：一百万条数据
 
-![全量持久化性能的簇状图](https://quickchart.io/chart?c={type:'bar',data:{labels:['1k/次','1w/次','10w/次','100w/次'],datasets:[{label:'红黑树',data:[130,1207,3429,3105]},{label:'跳表',data:[142,1029,4424,3094]},{label:'哈希',data:[111,626,1072,1219]}]},options:{scales:{xAxes:[{scaleLabel:{display:true,labelString:'SAVE%20间隔'}}],yAxes:[{scaleLabel:{display:true,labelString:'qps（次/秒）'}}]}}})
+
+| SAVE间隔 \ 性能指标 | qps |
+| :--- | :---: |
+| **1k\次** | 16013 |
+| **1w\次** | 17866 |
+| **10w\次** | 15507 |
+| **100w\次** | 3300 |
+
 
 ### Kvstore性能对比
 
