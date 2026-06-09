@@ -158,6 +158,9 @@ enum kvs_reply_t{// enum used for client reply
 int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 
 	if (tokens[0] == NULL || count <= 0 || cli == NULL) return -1;
+
+	kvs_check_save_status ();
+
 	int cmd = KVS_CMD_START;
 	for (cmd = KVS_CMD_START;cmd < KVS_CMD_COUNT;cmd ++) {
 		if (strcmp(tokens[0], command[cmd]) == 0) {
@@ -401,7 +404,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 #endif
 	case KVS_CMD_SAVE:
 		ret = kvs_save_write();
-		if (ret == 0) {
+		if (ret == 0 || ret == 1) {
 			reply = REPLY_OK;
 			is_write_success = 1;
 		} else {
@@ -558,7 +561,6 @@ void kvs_init(){
 void kvs_deinit(){
 	dest_kvengine();
 	kvs_log_close();
-	kvs_save_close();
 #if MEM_POO
 	mp_destroy(&pools);
 #endif

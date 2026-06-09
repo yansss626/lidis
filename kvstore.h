@@ -30,6 +30,7 @@ typedef struct io_write_ctx_s{ // struct for io_uring context
     size_t len;
 	struct io_uring * ring;
 	int tasks_count; //number of io_uring_prep_write
+	off_t offset;
 }io_write_ctx;
 
 typedef struct client_info_s{
@@ -339,7 +340,7 @@ int kvs_log_close();
 // Mechanism of SAVE****************//
 int kvs_save_init(msg_handler handler);
 int kvs_save_write();
-int kvs_save_close();
+void kvs_check_save_status ();
 //*********************************//
 
 
