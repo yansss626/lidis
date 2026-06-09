@@ -8,8 +8,9 @@
 #include <liburing.h>
 #include <unistd.h>
 #include <sys/mman.h>
-static struct io_uring ring_save = {0};
-static int ring_save_inited = 0;
+#include <sys/wait.h>
+
+
 
 extern kvs_conf_t global_config;
 
@@ -42,8 +43,15 @@ typedef enum kvs_engine_type_t{
 }kvs_engine_type;
 
 
+typedef enum kvs_save_status_t {
+    SAVE_STATUS_IDLE,
+    SAVE_STATUS_RUNNING,
+    SAVE_STATUS_ERROR,
+}kvs_save_status;
 
-
+static kvs_save_status save_status = SAVE_STATUS_IDLE;
+static pid_t kvs_save_child_pid = 0;
+static int is_pending = 0; // 标志位：用于判断SAVE指令是否被忽略
 
 int kvs_save_handler(client_info * cli){
     if(cli == NULL) return -1;
@@ -94,7 +102,7 @@ int kvs_save_init(msg_handler handler){
 
     kvs_file_read(ptr, statbuf.st_size, kvs_save_handler);
     munmap(ptr, statbuf.st_size);
-
+    close(fd);
     return 0;
 }
 
@@ -103,9 +111,9 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
     int ret = 0;
 
 
-    io_write_ctx * ctx = (io_write_ctx *)kvs_malloc(sizeof(io_write_ctx));
+    io_write_ctx * ctx = (io_write_ctx *)malloc(sizeof(io_write_ctx));
     if(ctx == NULL) {
-        perror("kvs_malloc error");
+        perror("malloc error");
         ret = -2;
         goto cleanup;
     }
@@ -145,10 +153,10 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
     // 固定开销：*3\r\n + 三个$的bulk头 + 三个\r\n末尾 + length所占字节长度， 保险给64
     int max_len = 64 + kstr_len + vstr_len + engine_len;
     
-    ctx->buf = (char *)kvs_malloc(max_len);
+    ctx->buf = (char *)malloc(max_len);
     if(ctx->buf == NULL){
         ret = -2;
-        perror("kvs_malloc error");
+        perror("malloc error");
         goto cleanup;
     }
     
@@ -164,8 +172,8 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
     for(int i = 0; i < nready; i++){
         struct io_uring_cqe * cqe = cqes[i];
         io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
-        kvs_free(ctx->buf);
-        kvs_free(ctx);
+        free(ctx->buf);
+        free(ctx);
         --main_ctx->tasks_count;
     }
     io_uring_cq_advance(main_ctx->ring, nready);
@@ -178,14 +186,15 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
         goto cleanup; 
     }
     ++main_ctx->tasks_count;
-    io_uring_prep_write(sqe, fd, ctx->buf, total_len, -1);
+    io_uring_prep_write(sqe, fd, ctx->buf, total_len, main_ctx->offset);
+    main_ctx->offset += total_len;
     io_uring_sqe_set_data(sqe, ctx);
     
     return 0;
     cleanup:
         if(ctx != NULL){
-            kvs_free(ctx->buf);
-            kvs_free(ctx);
+            free(ctx->buf);
+            free(ctx);
         }
         return ret;
 }
@@ -275,8 +284,8 @@ int kvs_traversal_write(int fd, io_write_ctx * main_ctx){
     if(main_ctx->tasks_count != 0){
         while(io_uring_wait_cqe(main_ctx->ring, &cqe) == 0){
             io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
-            kvs_free(ctx->buf);
-            kvs_free(ctx);
+            free(ctx->buf);
+            free(ctx);
             io_uring_cqe_seen(main_ctx->ring, cqe);
             --main_ctx->tasks_count;
             if(main_ctx->tasks_count == 0) break;
@@ -285,39 +294,113 @@ int kvs_traversal_write(int fd, io_write_ctx * main_ctx){
     return ret;
 }
 
-int kvs_save_write(){
-    if(global_config.enable_save == 0) return 0;
+int kvs_save_start(){
 
-    if(ring_save_inited == 0){
+    struct io_uring ring_save = {0};
+
     if(io_uring_queue_init(ENTRY_LENGTH, &ring_save, 0) != 0) {
         return -1;
     }
-    ring_save_inited = 1;
-}
-    int fd = open("./kvs-module/kvs_dump.rdb", O_WRONLY | O_CREAT | O_TRUNC, 0644); 
-    if(fd < 0) return -2;
+    
+
+    int fd = open("./kvs-module/kvs_dump.rdb.tmp", O_WRONLY | O_CREAT | O_TRUNC, 0644); 
+    if(fd < 0) {
+        io_uring_queue_exit(&ring_save);
+        return -2;
+    }
 
     io_write_ctx main_ctx = {0};
     main_ctx.ring = &ring_save;
     main_ctx.tasks_count = 0;
 
-    kvs_traversal_write(fd, &main_ctx);
-      
-    close(fd);
-
-    return 0;
-
-}
-
-
-
-
-int kvs_save_close(){
-    if(global_config.enable_save == 0) return 0;
-    if(ring_save_inited == 1){      
+    if (kvs_traversal_write(fd, &main_ctx) != 0) {
+        close(fd);
         io_uring_queue_exit(&ring_save);
-    } 
+        return -3;
+    }
+
+    fsync(fd);
+    close(fd);
+    io_uring_queue_exit(&ring_save);
+    rename("./kvs-module/kvs_dump.rdb.tmp", "./kvs-module/kvs_dump.rdb");
+
+    return 0;
+
+}
+
+
+
+
+
+
+int kvs_fork_save_child() {
+
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror("fork");
+        save_status = SAVE_STATUS_ERROR;
+        return -1;
+    }
+
+    if (pid == 0){
+        int ret = kvs_save_start();
+        if (ret == 0) _exit(0);
+        else _exit(1);
+    }
+    else {
+        save_status = SAVE_STATUS_RUNNING;
+        kvs_save_child_pid = pid;
+    }
 
     return 0;
 }
 
+void kvs_check_save_status () {
+    if(global_config.enable_save == 0) return ;
+
+    if (save_status != SAVE_STATUS_RUNNING || kvs_save_child_pid <= 0) return;
+
+    int status;
+    pid_t ret = waitpid(kvs_save_child_pid, &status, WNOHANG);
+
+    if (ret < 0) {
+        perror("waitpid");
+        kvs_save_child_pid = 0;
+        save_status = SAVE_STATUS_ERROR;
+        return;
+    }
+
+    if (ret == kvs_save_child_pid) {
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            save_status = SAVE_STATUS_IDLE;
+        }
+        else {
+            save_status = SAVE_STATUS_ERROR;
+        }
+        kvs_save_child_pid = 0;
+
+        if (is_pending == 1) {
+            is_pending = 0;
+            kvs_fork_save_child();
+        }
+    }
+    
+
+}
+
+
+
+int kvs_save_write() {
+    if(global_config.enable_save == 0) return 0;
+
+
+    kvs_check_save_status();
+
+    if (save_status == SAVE_STATUS_RUNNING) {
+        is_pending = 1;
+        return 1;
+    }
+
+    return kvs_fork_save_child();
+}
