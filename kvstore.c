@@ -406,7 +406,6 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		ret = kvs_save_write();
 		if (ret == 0 || ret == 1) {
 			reply = REPLY_OK;
-			is_write_success = 1;
 		} else {
 			reply = REPLY_ERROR;
 		}
