@@ -33,6 +33,8 @@ typedef struct io_write_ctx_s{ // struct for io_uring context
 	off_t offset;
 }io_write_ctx;
 
+typedef int (*kvs_recv_protocol)(const char * buf, int buf_size, int * head_len);
+
 typedef struct client_info_s{
 	int fd;
 	char * rbuf;
@@ -46,7 +48,16 @@ typedef struct client_info_s{
 	int w_pos;
 
 	int role; // 0:master 1:slave
+
+	int protocol;
+	kvs_recv_protocol recv_protocol;
 }client_info;
+
+typedef enum{
+	PROTO_UNKNOWN, 
+	PROTO_RESP, // redis 
+	PROTO_KVSP // kvstore
+}kvs_protocol_t;   // serialization protocol
 
 #define IPV4_MAX_STR_LEN 16
 #define PORT_MAX_STR_LEN 5  // "0"~"65535"
@@ -84,7 +95,7 @@ extern int ntyco_start(unsigned short port, msg_handler handler);
 int kvs_file_read(char * ptr, size_t size, msg_handler handler);
 int kvs_split_token(char *msg, char *tokens[]);
 int kvs_save_handler(client_info * cli);
-int resp_parse_bulk_size(const char * buf, size_t buf_size, int * head_len);
+int resp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
 int kvs_traversal_write(int fd, io_write_ctx * main_ctx);
 int kvs_config_init(kvs_conf_t *  conf);
 
