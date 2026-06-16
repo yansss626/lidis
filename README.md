@@ -105,12 +105,212 @@ kvstore 通过 `conf/kvstore.conf` 配置运行参数，启动时自动读取。
 | `Agent_port` | eBPF 代理服务的端口 | 从端配置 |
 
 
+## 3. 通信协议
+
+kvstore 当前支持两种客户端通信协议：自定义的 **KVSP 协议** 和兼容 Redis 的 **RESP 协议**。服务端会在客户端连接建立后，根据首个请求报文的起始内容自动识别协议类型，并在该连接后续通信中使用对应的解析方式。
+
+### 3.1 协议兼容性
+
+kvstore 支持以下两种请求格式：
+
+| 协议   | 说明                                                               |
+| ---- | ---------------------------------------------------------------- |
+| KVSP | kvstore 自定义协议，使用 `kvsp/1\r\n#<body_length>\r\n<body>` 格式描述一条完整命令 |
+| RESP | 兼容 Redis RESP 数组与批量字符串格式，可通过 hiredis 等 Redis 客户端发送请求             |
+
+协议识别规则如下：
+
+| 请求起始内容       | 协议类型 |
+| ------------ | ---- |
+| `kvsp/1\r\n` | KVSP |
+| `*`          | RESP |
+
+### 3.2 KVSP 请求格式
+
+KVSP 协议采用文本化长度前缀格式，一条完整请求由协议头、body 长度字段和命令 body 组成：
+
+```text
+kvsp/1\r\n
+#<body_length>\r\n
+<body>
+```
+
+其中：
+
+| 字段                   | 说明                             |
+| -------------------- | ------------------------------ |
+| `kvsp/1\r\n`         | KVSP 协议标识，表示当前请求使用 KVSP 1.0 格式 |
+| `#<body_length>\r\n` | body 部分的总字节长度                  |
+| `<body>`             | 命令参数区，由若干个 bulk string 组成      |
+
+body 内部仍然采用类似 RESP bulk string 的参数编码方式：
+
+```text
+$<arg_length>\r\n
+<arg>\r\n
+```
+
+其中：
+
+| 字段                  | 说明           |
+| ------------------- | ------------ |
+| `$<arg_length>\r\n` | 当前参数的字节长度    |
+| `<arg>\r\n`         | 参数内容及结尾 CRLF |
+
+因此，一条 KVSP 请求的完整格式为：
+
+```text
+kvsp/1\r\n
+#<body_length>\r\n
+$<len1>\r\n
+<arg1>\r\n
+$<len2>\r\n
+<arg2>\r\n
+...
+```
+
+### 3.3 KVSP 请求示例
+
+#### SET 请求
+
+命令：
+
+```text
+SET key value
+```
+
+对应 KVSP 编码为：
+
+```text
+kvsp/1\r\n
+#29\r\n
+$3\r\n
+SET\r\n
+$3\r\n
+key\r\n
+$5\r\n
+value\r\n
+```
+
+其中 body 部分为：
+
+```text
+$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n
+```
+
+body 长度计算如下：
+
+| 参数      | 编码形式              | 字节数 |
+| ------- | ----------------- | --- |
+| `SET`   | `$3\r\nSET\r\n`   | 9   |
+| `key`   | `$3\r\nkey\r\n`   | 9   |
+| `value` | `$5\r\nvalue\r\n` | 11  |
+| 合计      | -                 | 29  |
+
+#### GET 请求
+
+命令：
+
+```text
+GET key
+```
+
+对应 KVSP 编码为：
+
+```text
+kvsp/1\r\n
+#18\r\n
+$3\r\n
+GET\r\n
+$3\r\n
+key\r\n
+```
+
+#### SAVE 请求
+
+命令：
+
+```text
+SAVE
+```
+
+对应 KVSP 编码为：
+
+```text
+kvsp/1\r\n
+#9\r\n
+$4\r\n
+SAVE\r\n
+```
+
+### 3.4 RESP 兼容格式
+
+kvstore 同时兼容 Redis RESP 协议中的数组和批量字符串格式，因此也可以使用 hiredis 等 Redis 客户端发送请求。
+
+例如，命令：
+
+```text
+SET key value
+```
+
+对应 RESP 编码为：
+
+```text
+*3\r\n
+$3\r\n
+SET\r\n
+$3\r\n
+key\r\n
+$5\r\n
+value\r\n
+```
+
+命令：
+
+```text
+GET key
+```
+
+对应 RESP 编码为：
+
+```text
+*2\r\n
+$3\r\n
+GET\r\n
+$3\r\n
+key\r\n
+```
+
+### 3.5 响应格式
+
+当前 kvstore 的响应格式保持 RESP-like 风格，主要包括：
+
+| 响应格式                    | 含义                  |
+| ----------------------- | ------------------- |
+| `+OK\r\n`               | 操作成功                |
+| `-ERR message\r\n`      | 操作失败                |
+| `:1\r\n`                | 查询结果为存在或写入时 key 已存在 |
+| `$-1\r\n`               | 查询结果为空或 key 不存在     |
+| `$<len>\r\n<value>\r\n` | 返回字符串 value         |
+
+例如，GET 请求成功返回 value 时：
+
+```text
+$5\r\n
+value\r\n
+```
+
+当 key 不存在时：
+
+```text
+$-1\r\n
+```
 
 
 
-## 3.协议指令（四种数据结构）
+## 4.协议指令（四种数据结构）
 
-### 3.1 数组 （array）
+### 4.1 数组 （array）
 | 指令  | 参数  | 功能说明  | 成功响应  | 失败响应  |
 | :--- | :--- | :--- | :--- | :--- |
 | **SET** | `<key> <value>` | 存储键值对 | +OK\r\n / :1\r\n | -ERR message\r\n |
@@ -119,7 +319,7 @@ kvstore 通过 `conf/kvstore.conf` 配置运行参数，启动时自动读取。
 | **DEL** | `<key>` | 从存储引擎中删除指定的 Key-Value | +OK\r\n / $-1\r\n | -ERR message\r\n |
 | **EXIST** | `<key>` | 查询指定的 Key 是否存在于系统中 | :1\r\n / $-1\r\n | -ERR message\r\n |
  
-### 3.2 哈希 （hash）
+### 4.2 哈希 （hash）
 | 指令  | 参数  | 功能说明  | 成功响应  | 失败响应  |
 | :--- | :--- | :--- | :--- | :--- |
 | **HSET** | `<key> <value>` | 存储键值对 | +OK\r\n / :1\r\n | -ERR message\r\n |
@@ -128,7 +328,7 @@ kvstore 通过 `conf/kvstore.conf` 配置运行参数，启动时自动读取。
 | **HDEL** | `<key>` | 从存储引擎中删除指定的 Key-Value | +OK\r\n / $-1\r\n | -ERR message\r\n |
 | **HEXIST** | `<key>` | 查询指定的 Key 是否存在于系统中 | :1\r\n / $-1\r\n | -ERR message\r\n |
 
-### 3.3 跳表 （skiplist）
+### 4.3 跳表 （skiplist）
 | 指令  | 参数  | 功能说明  | 成功响应  | 失败响应  |
 | :--- | :--- | :--- | :--- | :--- |
 | **LSET** | `<key> <value>` | 存储键值对 | +OK\r\n / :1\r\n | -ERR message\r\n |
@@ -138,7 +338,7 @@ kvstore 通过 `conf/kvstore.conf` 配置运行参数，启动时自动读取。
 | **LEXIST** | `<key>` | 查询指定的 Key 是否存在于系统中 | :1\r\n / $-1\r\n | -ERR message\r\n |
 
 
-### 3.4 红黑树 （rbtree）
+### 4.4 红黑树 （rbtree）
 | 指令  | 参数  | 功能说明  | 成功响应  | 失败响应  |
 | :--- | :--- | :--- | :--- | :--- |
 | **RSET** | `<key> <value>` | 存储键值对 | +OK\r\n / :1\r\n | -ERR message\r\n |
@@ -147,37 +347,37 @@ kvstore 通过 `conf/kvstore.conf` 配置运行参数，启动时自动读取。
 | **RDEL** | `<key>` | 从存储引擎中删除指定的 Key-Value | +OK\r\n / $-1\r\n | -ERR message\r\n |
 | **REXIST** | `<key>` | 查询指定的 Key 是否存在于系统中 | :1\r\n / $-1\r\n | -ERR message\r\n |
 
-### 3.5 SAVE指令 将当前内存数据持久化到磁盘文件
+### 4.5 SAVE指令 将当前内存数据持久化到磁盘文件
 
 
-## 4. 核心功能模块
+## 5. 核心功能模块
 
-### 4.1 增量持久化 （AOF 机制）
+### 5.1 增量持久化 （AOF 机制）
 
 为了确保内存数据在系统宕机或重启后能够恢复，实现了增量持久化功能。
 
-#### 4.1.1 触发策略
+#### 5.1.1 触发策略
 采用“写时记录”原则，仅针对会改变内存数据状态的指令进行日志落盘，从而平衡了数据安全与磁盘 IO 性能。
 * **记录指令**：`SET`、`MOD`、`DEL`。
 * **忽略指令**：`GET`、`EXIST`、`SAVE`（此类指令不修改数据，无须记录）。
 
-#### 4.1.2 实现原理
+#### 5.1.2 实现原理
 
 数据落盘用io_uring实现，加载持久化数据用mmap。
 
-### 4.2 全量持久化 （SAVE）
+### 5.2 全量持久化 （SAVE）
 提供了 `SAVE` 指令，用于将当前内存中的全量数据持久化到 `.rdb` 文件中。
 
-#### 4.2.1 触发策略
+#### 5.2.1 触发策略
 解析到 `SAVE`指令时。
 
-#### 4.2.2 实现原理
+#### 5.2.2 实现原理
 
 数据落盘用io_uring实现，加载持久化数据用mmap。
 
 
 
-### 4.3 主从同步模块
+### 5.3 主从同步模块
 实现了主从同步机制。该模块支持 **全量同步** 与 **实时同步**。
 
 全量同步基于RDMA，增量同步基于ebpf。
@@ -194,7 +394,7 @@ sudo ./kvs-ebpf/kvs_agent
 ```
 
 
-## 5.测试方案
+## 6.测试方案
 
 `testcase_resp/` 目录提供了一系列基于 RESP 协议的测试客户端，用于验证 kvstore 各项功能。
 
@@ -260,7 +460,7 @@ make
 
 
 
-## 6.Kvstore 性能
+## 7.Kvstore 性能
 
 虚拟机配置：
 ![虚拟机配置](https://img.0voice.com/6780/8ae9726839f2cc8abacb45d423f8d456.png)
