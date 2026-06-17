@@ -24,7 +24,7 @@ static msg_handler kvs_handler;
 
 extern kvs_conf_t global_config;
 
-
+static off_t global_log_offset = 0;
 
 
 
@@ -93,7 +93,7 @@ int kvs_file_read(char * ptr, size_t size, msg_handler handler){
 
 int kvs_log_init(msg_handler handler){
     if(global_config.enable_log == 0) return 0;
-    fd_log = open("./kvs-data/kvs_appendonly.aof", O_RDWR | O_CREAT | O_APPEND, 0644);
+    fd_log = open("./kvs-data/kvs_appendonly.aof", O_RDWR | O_CREAT, 0644);
     if(fd_log < 0){
         perror("open");
         return -1;
@@ -105,6 +105,8 @@ int kvs_log_init(msg_handler handler){
     struct stat statbuf = {0};
     fstat(fd_log, &statbuf);
     if(statbuf.st_size <= 0) return 0;
+
+    global_log_offset = statbuf.st_size;
     
     char * ptr = (char *)mmap(NULL, statbuf.st_size, PROT_READ, MAP_PRIVATE, fd_log, 0);
     if(ptr == MAP_FAILED){
@@ -214,8 +216,11 @@ int kvs_log_write(client_info * cli){
     if (ctx == NULL) {
         return -4;
     }
+
+    ctx->offset = global_log_offset;
+    global_log_offset += ctx->len;
     
-    io_uring_prep_write(sqe, fd_log, ctx->buf, ctx->len, -1);
+    io_uring_prep_write(sqe, fd_log, ctx->buf, ctx->len, ctx->offset);
     io_uring_sqe_set_data(sqe, ctx);
     io_uring_submit(&ring_log);
 
