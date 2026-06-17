@@ -404,15 +404,17 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 #endif
 	case KVS_CMD_SAVE:
 		ret = kvs_save_write();
-		if (ret == 0 || ret == 1) {
+		if (ret == 0) { // 创建子进程，后台执行本次SAVE。
 			reply = REPLY_OK;
-		} else {
+		} else if (ret == 1) {
+			reply = REPLY_OK; // 子进程被占用，本次SAVE未执行。
+		}
+		else {
 			reply = REPLY_ERROR;
 		}
 		break;
 	case KVS_CMD_SYNC:
-		kvs_full_sync(cli);
-		length = 0;
+		ret = kvs_full_sync(cli);
 		break;
 
 	case KVS_CMD_COMMAND:
@@ -474,6 +476,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			kvs_incr_sync(cli);
 		
 	}
+
 	return length;
 }
 
