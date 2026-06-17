@@ -98,7 +98,10 @@ int kvs_save_init(msg_handler handler){
     }
 
     struct stat statbuf = {0};
-    fstat(fd, &statbuf);
+    if (fstat(fd, &statbuf) < 0) {
+        close(fd);
+        return -1;
+    }
 
     if(statbuf.st_size <= 0) {
         close(fd);

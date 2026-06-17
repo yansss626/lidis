@@ -103,7 +103,11 @@ int kvs_log_init(msg_handler handler){
     ring_log_inited = 1;
 
     struct stat statbuf = {0};
-    fstat(fd_log, &statbuf);
+    if (fstat(fd_log, &statbuf) < 0) {
+        close(fd_log);
+        return -1;
+    }
+
     if(statbuf.st_size <= 0) return 0;
 
     global_log_offset = statbuf.st_size;
