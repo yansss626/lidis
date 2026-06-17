@@ -55,6 +55,7 @@ static int is_pending = 0; // 标志位：用于判断SAVE指令是否被忽略
 
 int kvs_save_handler(client_info * cli){
     if(cli == NULL) return -1;
+
     char *tokens[KVS_MAX_TOKENS] = {0};
 	int count = kvs_split_token(cli->rbuf + cli->cmd_hl, tokens);
 	if (count < 0) return -2;
@@ -62,6 +63,7 @@ int kvs_save_handler(client_info * cli){
     char type = tokens[0][0];
     char * key = tokens[1];
     char * value = tokens[2];
+    
     int length = 0;
     
     switch (type)
@@ -86,13 +88,23 @@ int kvs_save_handler(client_info * cli){
     return length;
 }
 
-
+//在初始化阶段，加载全量持久化文件的数据。
 int kvs_save_init(msg_handler handler){
     if(global_config.enable_save == 0) return 0; 
-    int fd = open("./kvs-module/kvs_dump.rdb", O_RDONLY);
+
+    int fd = open("./kvs-data/kvs_dump.kvsdb", O_RDONLY);
+    if (fd < 0) {
+        return 0;  
+    }
+
     struct stat statbuf = {0};
     fstat(fd, &statbuf);
-    if(statbuf.st_size <= 0) return 0;
+
+    if(statbuf.st_size <= 0) {
+        close(fd);
+        return 0;
+    }
+
     char * ptr = (char *)mmap(NULL, statbuf.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if(ptr == MAP_FAILED){
         perror("mmap");
@@ -106,18 +118,8 @@ int kvs_save_init(msg_handler handler){
     return 0;
 }
 
-int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, io_write_ctx * main_ctx){
-    if(fd < 0 || key == NULL || value == NULL || main_ctx == NULL) return -1;
-    int ret = 0;
-
-
-    io_write_ctx * ctx = (io_write_ctx *)malloc(sizeof(io_write_ctx));
-    if(ctx == NULL) {
-        perror("malloc error");
-        ret = -2;
-        goto cleanup;
-    }
-    memset(ctx, 0, sizeof(io_write_ctx));
+static char * build_save_protocol(char * key, char * value, kvs_engine_type type, int * ret_len) { // ret_len: return string length
+    if (key == NULL || value == NULL || ret_len == NULL) return NULL;
 
     char * engine = NULL;
     switch (type)
@@ -139,31 +141,58 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
         break;
     }
     if(engine == NULL) {
-        ret = -3;
         printf("kvs_engine_type do not exist\n");
-        goto cleanup;
+        return NULL;
     }
 
-    // *3\r\n$<length>\r\n$<length>\r\n<key>\r\n$<length>\r\n<value>\r\n
+    // kvsp/1\r\n#<body_length>\r\n$<length>\r\n$<length>\r\n<key>\r\n$<length>\r\n<value>\r\n
 
     int kstr_len = strlen(key); // key string len
     int vstr_len = strlen(value); // value string len 
     int engine_len = strlen(engine); // engine string len   
 
-    // 固定开销：*3\r\n + 三个$的bulk头 + 三个\r\n末尾 + length所占字节长度， 保险给64
-    int max_len = 64 + kstr_len + vstr_len + engine_len;
-    
-    ctx->buf = (char *)malloc(max_len);
-    if(ctx->buf == NULL){
-        ret = -2;
-        perror("malloc error");
-        goto cleanup;
+
+    int body_len = snprintf(NULL, 0, "$%d\r\n%s\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", engine_len, engine, 
+            kstr_len, key, vstr_len, value);
+
+    int head_len = snprintf(NULL, 0, "kvsp/1\r\n#%d\r\n", body_len);
+
+    int total_len = body_len + head_len;
+
+    char * buf = (char *)kvs_malloc(total_len + 1);
+    if (buf == NULL) {
+        perror("kvs_malloc");
+        return NULL;
     }
     
-    int total_len = snprintf(ctx->buf, max_len, "*3\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", engine_len, engine, 
+    *ret_len = snprintf(buf, total_len + 1, "kvsp/1\r\n#%d\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", body_len,engine_len, engine, 
             kstr_len, key, vstr_len, value);
-    ctx->len = total_len;
-    //printf("ctx->buf: %s\n", ctx->buf);
+    
+    if (*ret_len != total_len) {
+        kvs_free(buf);
+        return NULL;
+    }
+        
+    return buf;
+
+}
+
+// write .kvsdb file (for SAVE command)
+int kvs_io_uring_write(int fd, char * buf, int buf_len, io_write_ctx * main_ctx){
+    if(fd < 0 || buf == NULL || buf_len <= 0 || main_ctx == NULL) return -1;
+
+    int ret = 0;
+
+    io_write_ctx * ctx = (io_write_ctx *)kvs_malloc(sizeof(io_write_ctx));
+    if(ctx == NULL) {
+        perror("kvs_malloc error");
+        ret = -2;
+        goto cleanup;
+    }
+    memset(ctx, 0, sizeof(io_write_ctx));
+
+    ctx->buf = buf;
+    ctx->len = buf_len;
 
     if(main_ctx->tasks_count >= TARGET_LENGTH) io_uring_submit(main_ctx->ring);
 
@@ -172,8 +201,8 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
     for(int i = 0; i < nready; i++){
         struct io_uring_cqe * cqe = cqes[i];
         io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
-        free(ctx->buf);
-        free(ctx);
+        kvs_free(ctx->buf);
+        kvs_free(ctx);
         --main_ctx->tasks_count;
     }
     io_uring_cq_advance(main_ctx->ring, nready);
@@ -186,16 +215,17 @@ int kvs_io_uring_write(int fd, char * key, char * value, kvs_engine_type type, i
         goto cleanup; 
     }
     ++main_ctx->tasks_count;
-    io_uring_prep_write(sqe, fd, ctx->buf, total_len, main_ctx->offset);
-    main_ctx->offset += total_len;
+    io_uring_prep_write(sqe, fd, ctx->buf, buf_len, main_ctx->offset);
+    main_ctx->offset += buf_len;
     io_uring_sqe_set_data(sqe, ctx);
     
     return 0;
     cleanup:
+        kvs_free(buf);
         if(ctx != NULL){
-            free(ctx->buf);
-            free(ctx);
+            kvs_free(ctx);
         }
+
         return ret;
 }
 
@@ -205,8 +235,11 @@ int kvs_save_write_rbtree(rbtree *T, rbtree_node *node, int fd, io_write_ctx *ma
     if(T == NULL || fd < 0) return fd;
     int ret = 0;
 	if (node != T->nil) {
-        ret = kvs_io_uring_write(fd, node->key, node->value, KVS_RBTREE, main_ctx);
+        int buf_len = 0;
+        char * buf = build_save_protocol(node->key, node->value, KVS_RBTREE, &buf_len);
+        ret = kvs_io_uring_write(fd, buf, buf_len, main_ctx);
         if(ret < 0) fd = ret;
+
 		kvs_save_write_rbtree(T, node->left, fd, main_ctx);
 
 		kvs_save_write_rbtree(T, node->right, fd, main_ctx);
@@ -233,9 +266,12 @@ int kvs_traversal_write(int fd, io_write_ctx * main_ctx){
         for (int i = 0;i < H_inst->max_slots;i ++) {
             hashnode_t *node = H_inst->nodes[i];
             while (node != NULL) { 
-                ret = kvs_io_uring_write(fd, node->key, node->value, KVS_HASH, main_ctx);
+                int buf_len = 0;
+                char * buf = build_save_protocol(node->key, node->value, KVS_HASH, &buf_len);
+                ret = kvs_io_uring_write(fd, buf, buf_len, main_ctx);
+
                 if(ret != 0) return ret;
-                            
+
                 node = node->next;
                 --count;
             }
@@ -252,7 +288,10 @@ int kvs_traversal_write(int fd, io_write_ctx * main_ctx){
         int count = inst->total;
         for (int i = 0;i < KVS_ARRAY_SIZE;i ++) {
             if (inst->table[i].key != NULL) {
-                ret = kvs_io_uring_write(fd, inst->table[i].key, inst->table[i].value, KVS_ARRAY, main_ctx);
+                int buf_len = 0;
+                char * buf = build_save_protocol(inst->table[i].key, inst->table[i].value, KVS_ARRAY, &buf_len);
+                ret = kvs_io_uring_write(fd, buf, buf_len, main_ctx);
+
                 if(ret != 0) return ret;
                     
                 --count;
@@ -269,7 +308,10 @@ int kvs_traversal_write(int fd, io_write_ctx * main_ctx){
     kvs_skiplist_t * L_inst = &global_skiplist;
     Node * current = L_inst->header->forward[0];
     while(current != NULL){
-        ret = kvs_io_uring_write(fd, current->key, current->value, KVS_SKIPLIST, main_ctx);
+        int buf_len = 0;
+        char * buf = build_save_protocol(current->key, current->value, KVS_SKIPLIST, &buf_len);
+        ret = kvs_io_uring_write(fd, buf, buf_len, main_ctx);
+
         if(ret != 0) return ret;
         
         current = current->forward[0];
@@ -284,8 +326,8 @@ int kvs_traversal_write(int fd, io_write_ctx * main_ctx){
     if(main_ctx->tasks_count != 0){
         while(io_uring_wait_cqe(main_ctx->ring, &cqe) == 0){
             io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
-            free(ctx->buf);
-            free(ctx);
+            kvs_free(ctx->buf);
+            kvs_free(ctx);
             io_uring_cqe_seen(main_ctx->ring, cqe);
             --main_ctx->tasks_count;
             if(main_ctx->tasks_count == 0) break;
@@ -303,7 +345,7 @@ int kvs_save_start(){
     }
     
 
-    int fd = open("./kvs-module/kvs_dump.rdb.tmp", O_WRONLY | O_CREAT | O_TRUNC, 0644); 
+    int fd = open("./kvs-data/kvs_dump.kvsdb.tmp", O_WRONLY | O_CREAT | O_TRUNC, 0644); 
     if(fd < 0) {
         io_uring_queue_exit(&ring_save);
         return -2;
@@ -322,7 +364,7 @@ int kvs_save_start(){
     fsync(fd);
     close(fd);
     io_uring_queue_exit(&ring_save);
-    rename("./kvs-module/kvs_dump.rdb.tmp", "./kvs-module/kvs_dump.rdb");
+    rename("./kvs-data/kvs_dump.kvsdb.tmp", "./kvs-data/kvs_dump.kvsdb");
 
     return 0;
 
@@ -333,7 +375,7 @@ int kvs_save_start(){
 
 
 
-int kvs_fork_save_child() {
+static int kvs_fork_save_child() {
 
     pid_t pid = fork();
 
