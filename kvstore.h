@@ -96,6 +96,7 @@ int kvs_file_read(char * ptr, size_t size, msg_handler handler);
 int kvs_split_token(char *msg, char *tokens[]);
 int kvs_save_handler(client_info * cli);
 int resp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
+int kvsp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
 int kvs_traversal_write(int fd, io_write_ctx * main_ctx);
 int kvs_config_init(kvs_conf_t *  conf);
 
