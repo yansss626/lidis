@@ -113,61 +113,60 @@ kvstore 当前支持两种客户端通信协议：自定义的 **KVSP 协议** �
 
 kvstore 支持以下两种请求格式：
 
-| 协议   | 说明                                                               |
-| ---- | ---------------------------------------------------------------- |
-| KVSP | kvstore 自定义协议，使用 `kvsp/1\r\n#<body_length>\r\n<body>` 格式描述一条完整命令 |
-| RESP | 兼容 Redis RESP 数组与批量字符串格式，可通过 hiredis 等 Redis 客户端发送请求             |
+| 协议   | 说明                                                                      |
+| ---- | ----------------------------------------------------------------------- |
+| KVSP | kvstore 自定义协议，使用 `#<body_length>\r\n^<tok_len>&<tok>...\r\n` 格式描述一条完整命令 |
+| RESP | 兼容 Redis RESP 数组与批量字符串格式，可通过 hiredis 等 Redis 客户端发送请求                    |
 
 协议识别规则如下：
 
-| 请求起始内容       | 协议类型 |
-| ------------ | ---- |
-| `kvsp/1\r\n` | KVSP |
-| `*`          | RESP |
+| 请求起始内容 | 协议类型 |
+| ------ | ---- |
+| `#`    | KVSP |
+| `*`    | RESP |
+
+其中，KVSP 协议请求必须以 `#` 开头，RESP 协议请求必须以 `*` 开头。服务端在识别协议后，会为当前客户端连接绑定对应的协议解析函数。
 
 ### 3.2 KVSP 请求格式
 
-KVSP 协议采用文本化长度前缀格式，一条完整请求由协议头、body 长度字段和命令 body 组成：
+KVSP 协议采用文本化长度前缀格式。一条完整请求由协议头和命令 body 组成：
 
 ```text
-kvsp/1\r\n
-#<body_length>\r\n
-<body>
+#<body_length>\r\n<body>
 ```
 
 其中：
 
-| 字段                   | 说明                             |
-| -------------------- | ------------------------------ |
-| `kvsp/1\r\n`         | KVSP 协议标识，表示当前请求使用 KVSP 1.0 格式 |
-| `#<body_length>\r\n` | body 部分的总字节长度                  |
-| `<body>`             | 命令参数区，由若干个 bulk string 组成      |
+| 字段              | 说明                               |
+| --------------- | -------------------------------- |
+| `#`             | KVSP 请求起始标志                      |
+| `<body_length>` | body 部分的总字节长度                    |
+| `\r\n`          | 协议头结束标志                          |
+| `<body>`        | 命令参数区，由若干个 token 组成，并以 `\r\n` 结束 |
 
-body 内部仍然采用类似 RESP bulk string 的参数编码方式：
+body 内部的参数编码方式如下：
 
 ```text
-$<arg_length>\r\n
-<arg>\r\n
+^<tok_len>&<tok>^<tok_len>&<tok>...\r\n
 ```
 
 其中：
 
-| 字段                  | 说明           |
-| ------------------- | ------------ |
-| `$<arg_length>\r\n` | 当前参数的字节长度    |
-| `<arg>\r\n`         | 参数内容及结尾 CRLF |
+| 字段          | 说明             |
+| ----------- | -------------- |
+| `^`         | token 长度字段起始标志 |
+| `<tok_len>` | 当前 token 的字节长度 |
+| `&`         | token 内容起始标志   |
+| `<tok>`     | token 内容       |
+| `\r\n`      | body 结束标志      |
 
 因此，一条 KVSP 请求的完整格式为：
 
 ```text
-kvsp/1\r\n
-#<body_length>\r\n
-$<len1>\r\n
-<arg1>\r\n
-$<len2>\r\n
-<arg2>\r\n
-...
+#<body_length>\r\n^<len1>&<arg1>^<len2>&<arg2>...\r\n
 ```
+
+需要注意的是，`body_length` 表示 body 部分的总字节数，包含 body 末尾的 `\r\n`。
 
 ### 3.3 KVSP 请求示例
 
@@ -182,30 +181,24 @@ SET key value
 对应 KVSP 编码为：
 
 ```text
-kvsp/1\r\n
-#29\r\n
-$3\r\n
-SET\r\n
-$3\r\n
-key\r\n
-$5\r\n
-value\r\n
+#22\r\n^3&SET^3&key^5&value\r\n
 ```
 
 其中 body 部分为：
 
 ```text
-$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n
+^3&SET^3&key^5&value\r\n
 ```
 
 body 长度计算如下：
 
-| 参数      | 编码形式              | 字节数 |
-| ------- | ----------------- | --- |
-| `SET`   | `$3\r\nSET\r\n`   | 9   |
-| `key`   | `$3\r\nkey\r\n`   | 9   |
-| `value` | `$5\r\nvalue\r\n` | 11  |
-| 合计      | -                 | 29  |
+| 参数      | 编码形式       | 字节数 |
+| ------- | ---------- | --- |
+| `SET`   | `^3&SET`   | 6   |
+| `key`   | `^3&key`   | 6   |
+| `value` | `^5&value` | 8   |
+| 结束字符    | `\r\n`     | 2   |
+| 合计      | -          | 22  |
 
 #### GET 请求
 
@@ -218,13 +211,23 @@ GET key
 对应 KVSP 编码为：
 
 ```text
-kvsp/1\r\n
-#18\r\n
-$3\r\n
-GET\r\n
-$3\r\n
-key\r\n
+#14\r\n^3&GET^3&key\r\n
 ```
+
+其中 body 部分为：
+
+```text
+^3&GET^3&key\r\n
+```
+
+body 长度计算如下：
+
+| 参数    | 编码形式     | 字节数 |
+| ----- | -------- | --- |
+| `GET` | `^3&GET` | 6   |
+| `key` | `^3&key` | 6   |
+| 结束字符  | `\r\n`   | 2   |
+| 合计    | -        | 14  |
 
 #### SAVE 请求
 
@@ -237,15 +240,26 @@ SAVE
 对应 KVSP 编码为：
 
 ```text
-kvsp/1\r\n
-#9\r\n
-$4\r\n
-SAVE\r\n
+#9\r\n^4&SAVE\r\n
 ```
+
+其中 body 部分为：
+
+```text
+^4&SAVE\r\n
+```
+
+body 长度计算如下：
+
+| 参数     | 编码形式      | 字节数 |
+| ------ | --------- | --- |
+| `SAVE` | `^4&SAVE` | 7   |
+| 结束字符   | `\r\n`    | 2   |
+| 合计     | -         | 9   |
 
 ### 3.4 RESP 兼容格式
 
-kvstore 同时兼容 Redis RESP 协议中的数组和批量字符串格式，因此也可以使用 hiredis 等 Redis 客户端发送请求。
+kvstore 同时兼容 Redis RESP 协议中的数组和批量字符串格式，因此可以使用 hiredis 等 Redis 客户端发送请求。
 
 例如，命令：
 
@@ -256,13 +270,7 @@ SET key value
 对应 RESP 编码为：
 
 ```text
-*3\r\n
-$3\r\n
-SET\r\n
-$3\r\n
-key\r\n
-$5\r\n
-value\r\n
+*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n
 ```
 
 命令：
@@ -274,30 +282,27 @@ GET key
 对应 RESP 编码为：
 
 ```text
-*2\r\n
-$3\r\n
-GET\r\n
-$3\r\n
-key\r\n
+*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n
 ```
+
+需要注意的是，kvstore 当前主要兼容 Redis RESP 的命令编码格式，并不表示完整实现 Redis 的所有命令语义。
 
 ### 3.5 响应格式
 
 当前 kvstore 的响应格式保持 RESP-like 风格，主要包括：
 
-| 响应格式                    | 含义                  |
-| ----------------------- | ------------------- |
-| `+OK\r\n`               | 操作成功                |
-| `-ERR message\r\n`      | 操作失败                |
-| `:1\r\n`                | 查询结果为存在或写入时 key 已存在 |
-| `$-1\r\n`               | 查询结果为空或 key 不存在     |
-| `$<len>\r\n<value>\r\n` | 返回字符串 value         |
+| 响应格式                    | 含义                   |
+| ----------------------- | -------------------- |
+| `+OK\r\n`               | 操作成功                 |
+| `-ERR message\r\n`      | 操作失败                 |
+| `:1\r\n`                | 查询结果为存在，或写入时 key 已存在 |
+| `$-1\r\n`               | 查询结果为空，或 key 不存在     |
+| `$<len>\r\n<value>\r\n` | 返回字符串 value          |
 
 例如，GET 请求成功返回 value 时：
 
 ```text
-$5\r\n
-value\r\n
+$5\r\nvalue\r\n
 ```
 
 当 key 不存在时：
@@ -305,6 +310,7 @@ value\r\n
 ```text
 $-1\r\n
 ```
+
 
 
 
