@@ -57,15 +57,16 @@ int kvs_save_handler(client_info * cli){
     if(cli == NULL) return -1;
 
     char *tokens[KVS_MAX_TOKENS] = {0};
-	int count = kvs_split_token(cli->rbuf + cli->cmd_hl, tokens);
-	if (count < 0) return -2;
+
+	int count = kvs_split_token(cli, tokens);
+	if (count != 3 || tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL) return -2;
 
     char type = tokens[0][0];
     char * key = tokens[1];
     char * value = tokens[2];
     
     int length = 0;
-    
+
     switch (type)
     {
     case 'A': //array
@@ -148,17 +149,17 @@ static char * build_save_protocol(char * key, char * value, kvs_engine_type type
         return NULL;
     }
 
-    // kvsp/1\r\n#<body_length>\r\n$<length>\r\n$<length>\r\n<key>\r\n$<length>\r\n<value>\r\n
+    // #<body_length>\r\n^<tok_len>&<tok>^<tok_len>&<tok>...\r\n
 
     int kstr_len = strlen(key); // key string len
     int vstr_len = strlen(value); // value string len 
     int engine_len = strlen(engine); // engine string len   
 
 
-    int body_len = snprintf(NULL, 0, "$%d\r\n%s\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", engine_len, engine, 
+    int body_len = snprintf(NULL, 0, "^%d&%s^%d&%s^%d&%s\r\n", engine_len, engine, 
             kstr_len, key, vstr_len, value);
 
-    int head_len = snprintf(NULL, 0, "kvsp/1\r\n#%d\r\n", body_len);
+    int head_len = snprintf(NULL, 0, "#%d\r\n", body_len);
 
     int total_len = body_len + head_len;
 
@@ -168,7 +169,7 @@ static char * build_save_protocol(char * key, char * value, kvs_engine_type type
         return NULL;
     }
     
-    *ret_len = snprintf(buf, total_len + 1, "kvsp/1\r\n#%d\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", body_len,engine_len, engine, 
+    *ret_len = snprintf(buf, total_len + 1, "#%d\r\n^%d&%s^%d&%s^%d&%s\r\n", body_len,engine_len, engine, 
             kstr_len, key, vstr_len, value);
     
     if (*ret_len != total_len) {

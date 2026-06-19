@@ -68,7 +68,7 @@ int kvs_file_read(char * ptr, size_t size, msg_handler handler){
         cli.cmd_hl = head_len;
         cli.cmd_tl = total_len;
 
-        memcpy(cli.rbuf , ptr, total_len);
+        memcpy(cli.rbuf, ptr, total_len);
         cli.rbuf[total_len] = '\0';
         //printf("cli.rbuf: %s\n", cli.rbuf);
 
@@ -129,79 +129,16 @@ int kvs_log_init(msg_handler handler){
     return 0;
 }
 
-char * add_kvsp_head(char * buf, int buf_len, int * ret_len) {
-    if (buf == NULL || buf_len <= 0 || ret_len == NULL) return NULL;
-
-    int head_len = snprintf(NULL, 0, "kvsp/1\r\n#%d\r\n", buf_len);
-    if (head_len <= 0) {
-        return NULL;
-    }
-
-    char * ret_buf = (char *)kvs_malloc(head_len + buf_len);
-    if(ret_buf == NULL){
-        perror("kvs_malloc");
-        return NULL;
-    }
-
-    *ret_len = head_len + buf_len;
-
-    if (snprintf(ret_buf, *ret_len, "kvsp/1\r\n#%d\r\n", buf_len) != head_len) {
-        kvs_free(ret_buf);
-        return NULL;
-    }
-
-    memcpy(ret_buf + head_len, buf, buf_len);
-
-    return ret_buf;
-}
-
-
-io_write_ctx * create_log_ctx(client_info * cli) {
-    if (cli == NULL) return NULL;
-    
-    char * log_data = NULL;
-    int data_len = 0;
-
-    io_write_ctx * ctx = (io_write_ctx *)kvs_malloc(sizeof(io_write_ctx));
-    if(ctx == NULL){
-        perror("kvs_malloc");
-        return NULL;
-    }
-
-    if (cli->protocol == PROTO_RESP) {
-        log_data = add_kvsp_head(cli->rbuf + cli->cmd_hl, cli->cmd_tl - cli->cmd_hl, &data_len);
-    }
-    else if (cli->protocol == PROTO_KVSP) {
-        log_data = (char *)kvs_malloc(cli->cmd_tl);
-        if(log_data == NULL){
-            perror("kvs_malloc");
-            kvs_free(ctx);
-            return NULL;
-        }
-        memcpy(log_data, cli->rbuf, cli->cmd_tl);
-        data_len = cli->cmd_tl;
-    }
-
-    if (log_data == NULL || data_len <= 0) {
-        kvs_free(ctx);
-        return NULL;
-    }
-
-    ctx->buf = log_data;
-    ctx->len = data_len;
-    
-    //printf("ctx->buf: %s\n", ctx->buf);    
-
-    return ctx;
-}
-
-int kvs_log_write(client_info * cli){
+int kvs_log_write(char **tokens, int count){
     if(global_config.enable_log == 0) return 0;
-    if(cli == NULL) return -1;
-    if(fd_log < 0 || ring_log_inited != 1) return -2;
+    if (tokens[0] == NULL || count <= 0) return -1;
+    if(fd_log < 0 || ring_log_inited != 1) return -1;
+    
+    int buf_len = 0;
+    char * buf = kvs_build_kvsp_frame(count, tokens, &buf_len);
+    if (buf == NULL || buf_len <= 0) return -2;
 
     struct io_uring_cqe * cqe = NULL;
-    
     while(io_uring_peek_cqe(&ring_log, &cqe) == 0){
         io_write_ctx * ctx = (io_write_ctx *)io_uring_cqe_get_data(cqe);
         kvs_free(ctx->buf);
@@ -213,22 +150,24 @@ int kvs_log_write(client_info * cli){
     struct io_uring_sqe * sqe = io_uring_get_sqe(&ring_log);
     if(sqe == NULL){
         io_uring_submit(&ring_log);
-        return -3;
+        kvs_free(buf);
+        return -2;
     }
 
-    io_write_ctx * ctx = create_log_ctx(cli);
-    if (ctx == NULL) {
-        return -4;
+    io_write_ctx * ctx = (io_write_ctx *)kvs_malloc(sizeof(io_write_ctx));
+    if(ctx == NULL){
+        perror("kvs_malloc");
+        kvs_free(buf);
+        return-2;
     }
-
+    ctx->buf = buf;
+    ctx->len = buf_len;
     ctx->offset = global_log_offset;
     global_log_offset += ctx->len;
     
     io_uring_prep_write(sqe, fd_log, ctx->buf, ctx->len, ctx->offset);
     io_uring_sqe_set_data(sqe, ctx);
     io_uring_submit(&ring_log);
-
-
 
     return 0;
 }

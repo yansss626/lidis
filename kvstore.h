@@ -1,6 +1,3 @@
-
-
-
 #ifndef __KV_STORE_H__
 #define __KV_STORE_H__
 
@@ -12,8 +9,6 @@
 #define NETWORK_NTYCO		2
 
 #define NETWORK_SELECT		NETWORK_NTYCO
-
-
 
 #define KVS_MAX_TOKENS		128
 
@@ -35,6 +30,11 @@ typedef struct io_write_ctx_s{ // struct for io_uring context
 
 typedef int (*kvs_recv_protocol)(const char * buf, int buf_size, int * head_len);
 
+typedef enum{
+	PROTO_UNKNOWN, 
+	PROTO_RESP, // redis 
+	PROTO_KVSP // kvstore
+}kvs_protocol_t;   // serialization protocol
 typedef struct client_info_s{
 	int fd;
 	char * rbuf;
@@ -49,18 +49,13 @@ typedef struct client_info_s{
 
 	int role; // 0:master 1:slave
 
-	int protocol;
+	kvs_protocol_t protocol;
 	kvs_recv_protocol recv_protocol;
 }client_info;
 
-typedef enum{
-	PROTO_UNKNOWN, 
-	PROTO_RESP, // redis 
-	PROTO_KVSP // kvstore
-}kvs_protocol_t;   // serialization protocol
-
 #define IPV4_MAX_STR_LEN 16
-#define PORT_MAX_STR_LEN 5  // "0"~"65535"
+#define PORT_MAX_STR_LEN 6  // "0"~"65535"
+
 typedef struct kvs_conf_s
 {
 	int enable_log;
@@ -78,26 +73,56 @@ typedef struct kvs_conf_s
 
 }kvs_conf_t; // kvstore configuration
 
-
 #include "kvs_sync.h"
 
+// kvs_protocol.c
+int kvs_split_token(client_info * cli, char *tokens[]);
+int resp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
+int kvsp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
+int kvs_detect_protocol(client_info * cli_info);
+char * kvs_build_kvsp_frame(int argc, char * argv[], int * buf_len);
+//
+
+// kvstore serialization protocol: kvsp
+// frame: #<body_length>\r\n^<tok_len>&<tok>^<tok_len>&<tok>...\r\n
+#define KVSP_START_STR	"#"
+#define KVSP_START_STR_LEN	1
+
+#define KVSP_HEAD_TAIL_STR	"\r\n"
+#define KVSP_HEAD_TAIL_STR_LEN	2
+
+#define KVSP_TOK_LEN_START_CHAR	'^'
+#define KVSP_TOK_START_CHAR	'&'
+
+#define KVSP_END_STR	"\r\n"
+#define	KVSP_END_STR_LEN	2
+
+#define KVS_ERR_PROTO_LEN	22
+//
 
 typedef int (*msg_handler)(client_info * cli);
 
-
+// kvs-server
 int reactor_start(unsigned short port, msg_handler handler);
-
-
-
 extern int proactor_start(unsigned short port, msg_handler handler);
 extern int ntyco_start(unsigned short port, msg_handler handler);
+//
 
+// 	kvs_log.c
 int kvs_file_read(char * ptr, size_t size, msg_handler handler);
-int kvs_split_token(char *msg, char *tokens[]);
+int kvs_log_init(msg_handler handler);
+int kvs_log_write(char **tokens, int count);
+int kvs_log_close();
+//
+
+// kvs_save.c
+int kvs_save_init(msg_handler handler);
+int kvs_save_write();
+void kvs_check_save_status ();
 int kvs_save_handler(client_info * cli);
-int resp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
-int kvsp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
 int kvs_traversal_write(int fd, io_write_ctx * main_ctx);
+//
+
 int kvs_config_init(kvs_conf_t *  conf);
 
 #if ENABLE_ARRAY
@@ -124,7 +149,6 @@ int kvs_array_del(kvs_array_t *inst, char *key);
 int kvs_array_mod(kvs_array_t *inst, char *key, char *value);
 int kvs_array_exist(kvs_array_t *inst, char *key);
 
-
 #endif
 
 
@@ -132,7 +156,6 @@ int kvs_array_exist(kvs_array_t *inst, char *key);
 
 #define RED				1
 #define BLACK 			2
-
 #define ENABLE_KEY_CHAR		1
 
 #if ENABLE_KEY_CHAR
@@ -155,7 +178,6 @@ typedef struct _rbtree {
 	rbtree_node *nil;
 } rbtree;
 
-
 typedef struct _rbtree kvs_rbtree_t;
 
 int kvs_rbtree_create(kvs_rbtree_t *inst);
@@ -166,19 +188,14 @@ int kvs_rbtree_del(kvs_rbtree_t *inst, char *key);
 int kvs_rbtree_mod(kvs_rbtree_t *inst, char *key, char *value);
 int kvs_rbtree_exist(kvs_rbtree_t *inst, char *key);
 
-
-
 #endif
-
 
 #if ENABLE_HASH
 
 #define MAX_KEY_LEN	128
 #define MAX_VALUE_LEN	512
 #define MAX_TABLE_SIZE	1000000
-
 #define ENABLE_KEY_POINTER	1
-
 
 typedef struct hashnode_s {
 #if ENABLE_KEY_POINTER
@@ -192,7 +209,6 @@ typedef struct hashnode_s {
 	
 } hashnode_t;
 
-
 typedef struct hashtable_s {
 
 	hashnode_t **nodes; //* change **, 
@@ -201,9 +217,7 @@ typedef struct hashtable_s {
 	int count;
 
 } hashtable_t;
-
 typedef struct hashtable_s kvs_hash_t;
-
 
 int kvs_hash_create(kvs_hash_t *hash);
 void kvs_hash_destory(kvs_hash_t *hash);
@@ -212,7 +226,6 @@ char * kvs_hash_get(kvs_hash_t *hash, char *key);
 int kvs_hash_mod(kvs_hash_t *hash, char *key, char *value);
 int kvs_hash_del(kvs_hash_t *hash, char *key);
 int kvs_hash_exist(kvs_hash_t *hash, char *key);
-
 
 #endif
 
@@ -239,10 +252,7 @@ int kvs_skiplist_mod(kvs_skiplist_t * inst, char *key, char *value);
 int kvs_skiplist_del(kvs_skiplist_t * inst, char *key);
 int kvs_skiplist_exist(kvs_skiplist_t * inst, char *key);
 
-
 #endif
-
-
 
 void *kvs_malloc(size_t size);
 void *kvs_realloc(void * ptr, size_t size);
@@ -277,8 +287,6 @@ void kvs_free(void *ptr);
 	// slab without header
 	#define SLAB_SIZE_ALIGNMENT (128 * 1024) // 必须是页对齐的整数倍 
 	#define ALIGNMENT_THRESHOLD 128
-
-
 
 	static size_t size_classes[] = {
 		8, 16, 32, 48, 56, 64, 72, 80, 
@@ -340,21 +348,6 @@ void kvs_free(void *ptr);
 	void mp_free(kvs_mempool_t * pools, void * ptr);
 	void * mp_realloc(kvs_mempool_t * pools, void * ptr, size_t size);
 #endif
-
-
-// Mechanism of AOF****************//
-int kvs_log_init(msg_handler handler);
-int kvs_log_write(client_info * cli);
-int kvs_log_close();
-//*********************************//
-
-
-// Mechanism of SAVE****************//
-int kvs_save_init(msg_handler handler);
-int kvs_save_write();
-void kvs_check_save_status ();
-//*********************************//
-
 
 #endif
 

@@ -107,40 +107,6 @@ int is_recovering = 1; // global sign for kvstore initilization. 1 indicates tha
 
 // };
 
-
-
-/// redis serialization protocol: resp ************************
-int kvs_split_token(char *msg, char *tokens[]) {
-	if (msg == NULL || tokens == NULL) return -1;
-    int pos = 0;
-    int es_len = 2; // end string: \r\n
-    int bs_len = 0; // bulk string length
-    int idx = 0;
-    
-    while(msg[pos] != '\0'){   
-        if(msg[pos] == '$') {
-            ++pos;
-            bs_len = atoi(msg + pos);
-            while(msg[pos] != '\r'){
-                pos++;
-            }
-            pos += es_len;
-            tokens[idx++] = msg + pos;
-            msg[pos + bs_len] = '\0';
-            pos += bs_len + es_len;
-        }
-		else{
-			return -2;
-		}
-        
-    }
-    return idx;
-
-}
-
-//********************************************
-
-
 enum kvs_reply_t{// enum used for client reply
 	REPLY_START,
 	REPLY_OK,
@@ -467,14 +433,8 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 
 
 	if(is_write_success == 1 && is_recovering == 0) {
-			for(int i = 0; i < count; i++){
-				int pos = strlen(tokens[i]);
-				(tokens[i])[pos] = '\r';
-			} // repair cli->rbuf due to kvs_split_token
-		
-			kvs_log_write(cli);
-			kvs_incr_sync(cli);
-		
+
+		kvs_log_write(tokens, count);
 	}
 
 	return length;
@@ -499,7 +459,7 @@ int kvs_protocol(client_info * cli) {  //
 	//printf("%s\n", cli->rbuf);
 	char *tokens[KVS_MAX_TOKENS] = {0};
 
-	int count = kvs_split_token(cli->rbuf + cli->cmd_hl, tokens);
+	int count = kvs_split_token(cli, tokens);
 	if (count < 0) return -1;
 
 	//memcpy(response, msg, length);
@@ -563,16 +523,18 @@ void kvs_init(){
 void kvs_deinit(){
 	dest_kvengine();
 	kvs_log_close();
-#if MEM_POO
+#if MEM_POOL
 	mp_destroy(&pools);
 #endif
 }
 
+// kvstore configuation definition
 const char * configuation[] = {
 	"ENABLE_MODULE_SYNC", "ENABLE_MODULE_LOG", "ENABLE_MODULE_SAVE",
 	"Master_ip", "Master_port", "Mode", "Port", "Rdma_port",
 	"Agent_ip", "Agent_port",
 };
+
 enum kvs_conf_t{ // enum used for configutaion setup
 	KVS_CONF_START = 0,
 
@@ -594,6 +556,7 @@ enum kvs_conf_t{ // enum used for configutaion setup
 	
 	KVS_CONF_COUNT
 };
+
 int kvs_config_init(kvs_conf_t *  conf){
 	if(conf == NULL) return -1;
 	FILE * fp = fopen("./conf/kvstore.conf", "r");;
@@ -649,6 +612,7 @@ int kvs_config_init(kvs_conf_t *  conf){
 	fclose(fp);
 	return 0;
 }
+//
 
 int main(int argc, char *argv[]) {
 
