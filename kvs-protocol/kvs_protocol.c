@@ -234,7 +234,7 @@ int kvs_split_token(client_info * cli, char *tokens[]) {
 }
 
 // create kvsp like command: #<body_length>\r\n^<str_len>&<str>^<str_len>&<str>...\r\n
-char * kvs_build_kvsp_frame(int argc, char * argv[], int * buf_len) {
+char * kvs_build_kvsp_frame(int argc, const char * argv[], int * buf_len) {
     if (argc <= 0 || argv == NULL || buf_len == NULL) return NULL;
 
     int body_len = 0;
@@ -243,7 +243,7 @@ char * kvs_build_kvsp_frame(int argc, char * argv[], int * buf_len) {
     int ret = 0;
 
     for (int i = 0; i < argc; i++) {
-        char * str = argv[i];
+        const char * str = argv[i];
         if (argv[i] == NULL) {
             return NULL;
         }
@@ -276,7 +276,7 @@ char * kvs_build_kvsp_frame(int argc, char * argv[], int * buf_len) {
     offset += ret;
 
     for (int i = 0; i < argc; i++) {
-        char * str = argv[i];
+        const char * str = argv[i];
         size_t str_len = strlen(str);
         ret = snprintf(buf + offset, total_len + 1 - offset, "^%zu&%s", str_len, str);
         if (ret < 0) {

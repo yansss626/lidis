@@ -80,7 +80,7 @@ int kvs_split_token(client_info * cli, char *tokens[]);
 int resp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
 int kvsp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
 int kvs_detect_protocol(client_info * cli_info);
-char * kvs_build_kvsp_frame(int argc, char * argv[], int * buf_len);
+char * kvs_build_kvsp_frame(int argc, const char * argv[], int * buf_len);
 //
 
 // kvstore serialization protocol: kvsp
