@@ -150,10 +150,20 @@ void server_reader(void *arg) {
 
 				
 			}
-			if(cli_info->w_pos > 0){
-				if(cli_info->role == 1) cli_info->w_pos = 0; // slave doesn't reply
-				else ret = send(cli_info->fd, cli_info->wbuf, cli_info->w_pos, 0);
-				//printf("sbuf: %s\n", cli_info->wbuf);
+
+			if (cli_info->role == 1) {
+				cli_info->w_pos = 0; // slave doesn't reply
+			} else {
+				int sent = 0;
+				while (cli_info->w_pos - sent > 0) {
+					ret = send(cli_info->fd, cli_info->wbuf + sent, cli_info->w_pos - sent, 0);
+					if (ret <= 0) {
+						perror("send");
+						goto cleanup;
+					}
+					sent += ret;
+				}
+
 				cli_info->w_pos = 0;
 			}
 			
