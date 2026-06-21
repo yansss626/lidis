@@ -135,7 +135,7 @@ int kvs_log_write(char **tokens, int count){
     if(fd_log < 0 || ring_log_inited != 1) return -1;
     
     int buf_len = 0;
-    char * buf = kvs_build_kvsp_frame(count, tokens, &buf_len);
+    char * buf = kvs_build_kvsp_frame(count, (const char **)tokens, &buf_len);
     if (buf == NULL || buf_len <= 0) return -2;
 
     struct io_uring_cqe * cqe = NULL;
