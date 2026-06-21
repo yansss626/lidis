@@ -125,8 +125,6 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 
 	if (tokens[0] == NULL || count <= 0 || cli == NULL) return -1;
 
-	kvs_check_save_status ();
-
 	int cmd = KVS_CMD_START;
 	for (cmd = KVS_CMD_START;cmd < KVS_CMD_COUNT;cmd ++) {
 		if (strcmp(tokens[0], command[cmd]) == 0) {

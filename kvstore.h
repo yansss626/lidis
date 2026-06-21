@@ -118,7 +118,6 @@ int kvs_log_close();
 // kvs_save.c
 int kvs_save_init(msg_handler handler);
 int kvs_save_write();
-void kvs_check_save_status ();
 int kvs_save_handler(client_info * cli);
 int kvs_traversal_write(int fd, io_write_ctx * main_ctx);
 //

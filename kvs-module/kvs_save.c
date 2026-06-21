@@ -9,7 +9,8 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
-
+#include <sys/syscall.h> 
+#include "nty_coroutine.h"
 
 
 extern kvs_conf_t global_config;
@@ -51,7 +52,9 @@ typedef enum kvs_save_status_t {
 
 static kvs_save_status save_status = SAVE_STATUS_IDLE;
 static pid_t kvs_save_child_pid = 0;
-static int is_pending = 0; // 标志位：用于判断SAVE指令是否被忽略
+static int is_save_pending = 0; // 标志位：用于判断SAVE指令是否被忽略
+
+static int kvs_fork_save_child();
 
 int kvs_save_handler(client_info * cli){
     if(cli == NULL) return -1;
@@ -374,31 +377,85 @@ int kvs_save_start(){
 
 }
 
+static void  kvs_save_child_done(void * arg) {
+    int child_fd = *(int *)arg;
 
+    char result = '1';
+    ssize_t n = recv(child_fd, &result, 1, 0);
+    
+    int status = 0;
+    pid_t pid = kvs_save_child_pid;
+    int ret = waitpid(kvs_save_child_pid, &status, 0);
 
+    if (n == 1 && result == '0' && ret == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        save_status = SAVE_STATUS_IDLE;
+    }
+    else {
+        save_status = SAVE_STATUS_ERROR;
+    }
 
+    if (ret == pid) kvs_save_child_pid = 0;
+
+    if (is_save_pending == 1 && save_status == SAVE_STATUS_IDLE) {
+        is_save_pending = 0;
+        kvs_fork_save_child();
+    }
+
+    kvs_free(arg);
+    close(child_fd);
+}
 
 
 static int kvs_fork_save_child() {
+
+    int notify_pair[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, notify_pair) != 0) {
+        perror("socketpair");
+        return -1;
+    }
 
     pid_t pid = fork();
 
     if (pid < 0) {
         perror("fork");
         save_status = SAVE_STATUS_ERROR;
+        close(notify_pair[0]);
+        close(notify_pair[1]);
         return -1;
     }
 
     if (pid == 0){
+        close(notify_pair[0]);
         int ret = kvs_save_start();
-        if (ret == 0) _exit(0);
-        else _exit(1);
-    }
-    else {
-        save_status = SAVE_STATUS_RUNNING;
-        kvs_save_child_pid = pid;
+
+        char result = (ret == 0) ? '0':'1';
+        syscall(SYS_write, notify_pair[1], &result, 1);
+        close(notify_pair[1]);
+
+        _exit(ret == 0 ? 0 : 1);
     }
 
+    save_status = SAVE_STATUS_RUNNING;
+    kvs_save_child_pid = pid;
+
+    close(notify_pair[1]);
+
+#if (NETWORK_SELECT == NETWORK_NTYCO)
+    int * notify_fd = kvs_malloc(sizeof(int));
+    if (notify_fd == NULL) {
+        close(notify_pair[0]);
+        save_status = SAVE_STATUS_ERROR;
+        return -1;
+    }
+    *notify_fd = notify_pair[0];
+
+    nty_coroutine * co = NULL;
+    nty_coroutine_create(&co, kvs_save_child_done, notify_fd);
+
+#else
+    close(notify_pair[0]);
+#endif
+    
     return 0;
 }
 
@@ -426,8 +483,8 @@ void kvs_check_save_status () {
         }
         kvs_save_child_pid = 0;
 
-        if (is_pending == 1) {
-            is_pending = 0;
+        if (is_save_pending == 1) {
+            is_save_pending = 0;
             kvs_fork_save_child();
         }
     }
@@ -441,11 +498,17 @@ int kvs_save_write() {
     if(global_config.enable_save == 0) return 0;
 
 
+#if (NETWORK_SELECT != NETWORK_NTYCO)
     kvs_check_save_status();
+#endif
 
     if (save_status == SAVE_STATUS_RUNNING) {
-        is_pending = 1;
+        is_save_pending = 1;
         return 1;
+    }
+
+    if (save_status == SAVE_STATUS_ERROR) {
+        return -1;
     }
 
     return kvs_fork_save_child();
