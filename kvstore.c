@@ -379,6 +379,9 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		break;
 	case KVS_CMD_SYNC:
 		ret = kvs_master_full_sync(cli);
+		if (ret < 0) {
+			length = ret;
+		}
 		break;
 
 	case KVS_CMD_COMMAND:

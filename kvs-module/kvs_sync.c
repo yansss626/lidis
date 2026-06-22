@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/sendfile.h>
 #include <sys/syscall.h>
+#include <sys/wait.h>
 #include "nty_coroutine.h"
 #include "kvstore.h"
 
@@ -17,6 +18,22 @@
 #define ENABLE_EBPF     1
 #define ENABLE_SEND     0
 
+
+#define KVS_SYNC_COMMAND               "SYNC"
+
+#define KVS_SLAVE_FULLSYNC_READY       "FULL SYNC READY"
+#define KVS_SLAVE_FULLSYNC_FINISHED    "FULL SYNC FINISHED"
+#define KVS_SLAVE_FULLSYNC_ERROR       "FULL SYNC ERROR" 
+
+#define KVS_MASTER_FULLSYNC_OK         "FULL SYNC OK %zu"
+#define KVS_MASTER_FULLSYNC_ERROR      "FULL SYNC ERROR"
+#define KVS_MASTER_FULLSYNC_BUSY       "FULL SYNC BUSY"
+
+
+#define KVS_SYNC_RET_ERROR      -100
+#define KVS_SYNC_RET_BUSY       -101
+
+static int is_full_sync = 0;    // 用于判断主端是否正在与某个从端进行全量同步
 
 extern kvs_conf_t global_config;
 
@@ -52,11 +69,13 @@ int kvs_send_single_command(int sockfd, char * cmd) {
     int msg_len = 0;
     char * send_msg = kvs_build_kvsp_frame(1, argv, &msg_len);
     if (send_msg == NULL || msg_len <= 0) {
+        fprintf(stderr, "kvs_build_kvsp_frame error\n");
         return -2;
     }
 
     ssize_t n = send(sockfd, send_msg, msg_len, 0);
     if (n != msg_len) {
+        fprintf(stderr, "kvs_send_single_command: n != msg_len\n");
         kvs_free(send_msg);
         return -2;
     }
@@ -69,30 +88,33 @@ int kvs_send_single_command(int sockfd, char * cmd) {
 static ssize_t kvs_slave_obtain_file_size(int sockfd) {
     if (sockfd < 0) return -1;
 
-    if (kvs_send_single_command(sockfd, "SYNC") != 0) {
+    if (kvs_send_single_command(sockfd, KVS_SYNC_COMMAND) != 0) {
         return -2;
     }
 
     // obtain snapshot file size
     char recv_buf[BUFFER_SIZE] = {0};
     ssize_t n = recv(sockfd, recv_buf, BUFFER_SIZE, 0);
+
     if (n <= 0) {
         return -2;
     }
 
-    ssize_t file_size = 0;
-    size_t pos = 0;
-    while (pos < n && recv_buf[pos] >= '0' && recv_buf[pos] <= '9') {
-        int digit = recv_buf[pos] - '0';
-
-        if (file_size > (SSIZE_MAX - digit / 10)) return -2;
-        file_size = file_size * 10 + digit;
-        pos++;
+    if (strcmp(recv_buf, KVS_MASTER_FULLSYNC_BUSY) == 0) {
+        return KVS_SYNC_RET_BUSY;
     }
-    if (pos != n) return -2;
 
-    return file_size;
+    if (strcmp(recv_buf, KVS_MASTER_FULLSYNC_ERROR) == 0) {
+        return KVS_SYNC_RET_ERROR;
+    }
 
+    size_t file_size = 0;
+
+    if (sscanf(recv_buf, KVS_MASTER_FULLSYNC_OK, &file_size) != 1 || file_size > SSIZE_MAX) {
+        return KVS_SYNC_RET_ERROR;
+    }
+    printf("msg: %s\n", recv_buf);
+    return (ssize_t)file_size;
 
 }
 
@@ -118,7 +140,7 @@ static char * kvs_slave_obtain_file(ssize_t file_size, int sockfd, ssize_t * mod
 
 #elif ENABLE_SENDFILE
 
-        char * send_msg= "SLAVE READY";
+        char * send_msg= KVS_SLAVE_FULLSYNC_READY;
         send(sockfd, send_msg, strlen(send_msg), 0);
 
         size_t received = 0;
@@ -155,12 +177,23 @@ int kvs_slave_full_sync(int sockfd) {
     // 已有数据同步:
     ssize_t file_size = kvs_slave_obtain_file_size(sockfd);
 
+    if (file_size == KVS_SYNC_RET_BUSY) {
+        fprintf(stderr, "master is busy\n");
+        return KVS_SYNC_RET_BUSY;
+    }
+    
+    if (file_size == KVS_SYNC_RET_ERROR) {
+        fprintf(stderr, "full sync error\n");
+        return KVS_SYNC_RET_ERROR;
+    }
+
     if (file_size == 0) {
         return 0;
     }
 
     if (file_size < 0) {
-        return -2;     
+        ret = -2;
+        goto cleanup;     
     }
     
     ssize_t buf_len = 0;
@@ -180,6 +213,7 @@ int kvs_slave_full_sync(int sockfd) {
 
 
     cleanup:
+        if (ret != 0) kvs_send_single_command(sockfd, KVS_SLAVE_FULLSYNC_ERROR);
         kvs_free(buf);
 
     return ret;
@@ -229,12 +263,17 @@ int kvs_slave_sync(){
         return -1;
     }
 
-    if (kvs_slave_full_sync(master_fd) != 0) {
+    int ret = 0;
+
+    ret = kvs_slave_full_sync(master_fd);
+    if (ret != 0 && ret != KVS_SYNC_RET_BUSY) {
         close(master_fd);
         return -2;
     }
 
-    if (kvs_send_single_command(master_fd, "FULL SYNC FINISHED") != 0) {
+    ret = kvs_send_single_command(master_fd, KVS_SLAVE_FULLSYNC_FINISHED);
+    if (ret != 0) {
+        close(master_fd);
         return -2;
     }
 
@@ -309,6 +348,15 @@ static int kvs_master_write_snapshot() {
 
     char result = '1';
     ssize_t n = recv(notify_pair[0], &result, 1, 0);
+
+    int status = 0;
+    pid_t wret = waitpid(pid, &status, 0);
+    if (wret != pid || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+        close(notify_pair[0]);
+        close(fd);
+        return -1;
+    }
+
     if (n != 1 || result != '0') {
         fprintf(stderr, "kvs_master_write_snapshot error\n");
         close(notify_pair[0]);
@@ -387,7 +435,7 @@ int kvs_master_notify_and_wait_slave(client_info * cli, size_t file_size) {
     if (cli == NULL) return -1;
 
     char send_msg[BUFFER_SIZE] = {0};
-    int msg_len = snprintf(send_msg, BUFFER_SIZE, "%zu", file_size); // send file size
+    int msg_len = snprintf(send_msg, BUFFER_SIZE, KVS_MASTER_FULLSYNC_OK, file_size); // send file size
     ssize_t n = send(cli->fd, send_msg, msg_len, 0);
     if (n != msg_len) {
         return -2;
@@ -398,9 +446,9 @@ int kvs_master_notify_and_wait_slave(client_info * cli, size_t file_size) {
     char recv_buf[BUFFER_SIZE] = {0};
     n = recv(cli->fd, recv_buf, BUFFER_SIZE, 0); // recv slave info
 
-    char * expected_reply = "SLAVE READY";
+    char * expected_reply = KVS_SLAVE_FULLSYNC_READY;
     size_t reply_len = strlen(expected_reply);
-    if (n < reply_len || memcmp(recv_buf, expected_reply, reply_len) != 0) {
+    if (n < reply_len || strncmp(recv_buf, expected_reply, reply_len) != 0) {
         return -2;
     }
 
@@ -413,33 +461,49 @@ int kvs_master_full_sync(client_info * cli) {
 
     if(cli == NULL) return -1;
 
-    int fd = kvs_master_write_snapshot();
+    if (is_full_sync != 0) {
+        send(cli->fd, KVS_MASTER_FULLSYNC_BUSY, strlen(KVS_MASTER_FULLSYNC_BUSY), 0);
+        return 0;
+    }
+        
+    is_full_sync = 1;
+    
+    int fd = -1;
+    int ret = 0;
+    int is_fullsync_ok_sent = 0;
+
+    fd = kvs_master_write_snapshot();
     if (fd < 0) {
-        return -2;
+        ret = -2;
+        goto cleanup;
     }
 
     struct stat statbuf = {0};
     if (fstat(fd, &statbuf) < 0) {
         perror("fstat");
-        close(fd);
-        return -2;
+        ret = -2;
+        goto cleanup;
     } 
 
     if (kvs_master_notify_and_wait_slave(cli, statbuf.st_size) != 0) {
         fprintf(stderr, "kvs_master_notify_and_wait_slave error\n");
-        close(fd);
-        return -2;        
+        ret = -2;
+        goto cleanup;
     }
+    is_fullsync_ok_sent = 1;
 
     if (kvs_master_send_file(fd, statbuf.st_size, cli) != 0) {
         fprintf(stderr, "kvs_master_send_file error\n");
-        close(fd);
-        return -2;
+        ret = -2;
+        goto cleanup;
     }
 
-    close(fd);
+    cleanup:
+        if (fd >= 0) close(fd);
+        if (ret != 0 && is_fullsync_ok_sent == 0) kvs_send_single_command(cli->fd, KVS_MASTER_FULLSYNC_ERROR);
+        is_full_sync = 0;
 
-    return 0;
+    return ret;
 
 }
 
