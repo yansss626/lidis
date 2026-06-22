@@ -393,6 +393,8 @@ int kvs_master_notify_and_wait_slave(client_info * cli, size_t file_size) {
         return -2;
     }    
 
+    if (file_size == 0) return 0;
+
     char recv_buf[BUFFER_SIZE] = {0};
     n = recv(cli->fd, recv_buf, BUFFER_SIZE, 0); // recv slave info
 
