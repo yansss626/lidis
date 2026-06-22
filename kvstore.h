@@ -35,6 +35,7 @@ typedef enum{
 	PROTO_RESP, // redis 
 	PROTO_KVSP // kvstore
 }kvs_protocol_t;   // serialization protocol
+
 typedef struct client_info_s{
 	int fd;
 	char * rbuf;
@@ -52,6 +53,8 @@ typedef struct client_info_s{
 	kvs_protocol_t protocol;
 	kvs_recv_protocol recv_protocol;
 }client_info;
+
+client_info * client_info_init(int fd);
 
 #define IPV4_MAX_STR_LEN 16
 #define PORT_MAX_STR_LEN 6  // "0"~"65535"
@@ -72,8 +75,6 @@ typedef struct kvs_conf_s
 
 
 }kvs_conf_t; // kvstore configuration
-
-#include "kvs_sync.h"
 
 // kvs_protocol.c
 int kvs_split_token(client_info * cli, char *tokens[]);
@@ -121,6 +122,15 @@ int kvs_save_write();
 int kvs_save_handler(client_info * cli);
 int kvs_traversal_write(int fd, io_write_ctx * main_ctx);
 //
+
+// kvs_sync.c
+void server_reader(void * arg);
+int kvs_slave_sync();
+int kvs_master_full_sync(client_info * cli);
+int kvs_master_incr_sync(client_info * cli, char ** tokens, int count);
+int rdma_client(const char * server_ip, const char * port, char * ptr, size_t size);
+int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd);
+// kvs_sync.c
 
 int kvs_config_init(kvs_conf_t *  conf);
 

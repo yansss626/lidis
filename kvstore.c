@@ -378,7 +378,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		}
 		break;
 	case KVS_CMD_SYNC:
-		ret = kvs_full_sync(cli);
+		ret = kvs_master_full_sync(cli);
 		break;
 
 	case KVS_CMD_COMMAND:
@@ -433,6 +433,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	if(is_write_success == 1 && is_recovering == 0) {
 
 		kvs_log_write(tokens, count);
+		kvs_master_incr_sync(cli, tokens, count);
 	}
 
 	return length;
@@ -621,7 +622,7 @@ int main(int argc, char *argv[]) {
 	is_recovering = 0;
 	
 	if(global_config.mode == 1){
-		if(0 != kvs_connect_to_sync()){
+		if(0 != kvs_slave_sync()){
 			printf("failed to sync\n");
 		}
 	}
