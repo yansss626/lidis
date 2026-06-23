@@ -129,7 +129,7 @@ int kvs_slave_sync();
 int kvs_master_full_sync(client_info * cli);
 int kvs_master_incr_sync(client_info * cli, char ** tokens, int count);
 int rdma_client(const char * server_ip, const char * port, char * ptr, size_t size);
-int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd);
+ssize_t rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd);
 // kvs_sync.c
 
 int kvs_config_init(kvs_conf_t *  conf);

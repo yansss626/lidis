@@ -130,8 +130,8 @@ static char * kvs_slave_obtain_file(ssize_t file_size, int sockfd, ssize_t * mod
 
 #if ENABLE_RDMA
 
-        int rdma_mod_size = rdma_server(global_config.rdma_port, buf, file_size, sockfd);
-        if (rdma_mod_size <= 0) {
+        ssize_t rdma_mod_size = rdma_server(global_config.rdma_port, buf, file_size, sockfd);
+        if (rdma_mod_size < file_size) {
             kvs_free(buf);
             return NULL;
         }

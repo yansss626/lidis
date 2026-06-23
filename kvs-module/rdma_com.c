@@ -4,16 +4,23 @@
 #include <endian.h>
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
+
 struct pdata{ // private data
-    uint32_t buf_size; // remote buffer size 
-    uint32_t rkey; // remote key
+    uint64_t buf_size; // remote buffer size 
     uint64_t raddr; // remote addr 
+    uint32_t rkey; // remote key
 };
+
+#define KVS_SLAVE_FULLSYNC_READY       "FULL SYNC READY"
+
 #define MSG_LENGTH 32
+
 int rdma_client(const char * server_ip, const char * port, char * ptr, size_t size){
     if(server_ip == NULL || port == NULL || ptr == NULL || size <= 0) return -1;
 
     int ret = 0;
+    int ibv_ret = 0;
     struct rdma_addrinfo hints = {0};
     struct rdma_addrinfo * res = NULL;
     struct rdma_cm_id * id = NULL;
@@ -23,7 +30,7 @@ int rdma_client(const char * server_ip, const char * port, char * ptr, size_t si
     struct pdata server_data = {0};
     struct ibv_wc wc = {0};
     char msg[MSG_LENGTH] = {0};
-    snprintf(msg, MSG_LENGTH, "%ld", size);
+    snprintf(msg, MSG_LENGTH, "%zu", size);
 
     hints.ai_port_space = RDMA_PS_TCP;
     if(rdma_getaddrinfo(server_ip, port, &hints, &res) != 0){
@@ -74,8 +81,8 @@ int rdma_client(const char * server_ip, const char * port, char * ptr, size_t si
     }
 
     memcpy(&server_data, id->event->param.conn.private_data, sizeof(struct pdata));
-    uint32_t remote_buf_size = ntohl(server_data.buf_size);
-    if((size_t)remote_buf_size < size){
+    uint64_t remote_buf_size = be64toh(server_data.buf_size);
+    if(remote_buf_size < size){
         fprintf(stderr, "Server buffer size is not enough\n");
         
         snprintf(msg, MSG_LENGTH, "buffer size is not enough\n");
@@ -84,8 +91,8 @@ int rdma_client(const char * server_ip, const char * port, char * ptr, size_t si
             ret = -2;;
             goto cleanup;         
         }
-        while((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0){
-            if(ret < 0 || wc.status != IBV_WC_SUCCESS){
+        while((ibv_ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0){
+            if(ibv_ret < 0 || wc.status != IBV_WC_SUCCESS){
                 fprintf(stderr, "rdma_post_write failed\n");
                 ret = -3;
                 goto cleanup;
@@ -104,8 +111,8 @@ int rdma_client(const char * server_ip, const char * port, char * ptr, size_t si
         ret = -2;;
         goto cleanup;         
     }
-    while((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0){
-        if(ret < 0 || wc.status != IBV_WC_SUCCESS){
+    while((ibv_ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0){
+        if(ibv_ret < 0 || wc.status != IBV_WC_SUCCESS){
             fprintf(stderr, "rdma_post_write failed\n");
             ret = -3;
             goto cleanup;
@@ -117,8 +124,8 @@ int rdma_client(const char * server_ip, const char * port, char * ptr, size_t si
         ret = -2;;
         goto cleanup;         
     }
-    while((ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0){
-        if(ret < 0 || wc.status != IBV_WC_SUCCESS){
+    while((ibv_ret = ibv_poll_cq(id->send_cq, 1, &wc)) == 0){
+        if(ibv_ret < 0 || wc.status != IBV_WC_SUCCESS){
             fprintf(stderr, "rdma_post_write failed\n");
             ret = -3;
             goto cleanup;
@@ -138,10 +145,10 @@ int rdma_client(const char * server_ip, const char * port, char * ptr, size_t si
 
 
 
-int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd){
+ssize_t rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd){
     if(port == NULL || rdma_buf == NULL || size <= 0) return -1;
 
-    int ret = 0;
+    ssize_t ret = 0;
     struct rdma_addrinfo hints = {0};
     struct rdma_addrinfo * res = NULL;
     struct rdma_cm_id * id = NULL;
@@ -180,8 +187,8 @@ int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd){
         goto cleanup;
     }
 
-    char * info = "+READY";
-    send(sockfd, info, strlen(info) + 1, 0);
+    char * send_msg= KVS_SLAVE_FULLSYNC_READY;  // notify master rdma server is ready
+    send(sockfd, send_msg, strlen(send_msg), 0);
 
     int get_request = 0;
     if(rdma_get_request(listen_id, &id) != 0){
@@ -210,7 +217,7 @@ int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd){
     }
 
     
-    server_data.buf_size = htonl((uint32_t)size);
+    server_data.buf_size = htonl((uint64_t)size);
     server_data.raddr = htobe64((uintptr_t)rdma_buf);
     server_data.rkey = htonl(mr->rkey);
     conn_parm.private_data = &server_data;
@@ -224,8 +231,9 @@ int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd){
         goto cleanup;
     }
     
-    while((ret = ibv_poll_cq(id->recv_cq, 1, &wc)) == 0){
-        if(ret < 0 || wc.status != IBV_WC_SUCCESS){
+    int ibv_ret = 0;
+    while((ibv_ret = ibv_poll_cq(id->recv_cq, 1, &wc)) == 0){
+        if(ibv_ret < 0 || wc.status != IBV_WC_SUCCESS){
             fprintf(stderr, "rdma_post_write failed\n");
             ret = -3;
             goto cleanup;
@@ -234,9 +242,19 @@ int rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd){
     //printf("notify_msg: %s\n", notify_msg);
     //printf("rdma_buf: %s\n", rdma_buf);
 
-    ret = atoi(notify_msg);
-    //printf("ret: %d\n", ret);
-    if(ret <= 0){
+    ssize_t file_size = 0;
+    size_t pos = 0;
+    size_t msg_len = strnlen(notify_msg, MSG_LENGTH);
+    while (pos < msg_len && notify_msg[pos] >= '0' && notify_msg[pos] <= '9') {
+        int digit = notify_msg[pos] - '0';
+
+        if (file_size > (SSIZE_MAX - digit) / 10) break;
+        file_size = file_size * 10 + digit;
+        pos++;
+    }
+    
+    ret = file_size;
+    if(ret <= 0 || pos != msg_len){
         ret = -4;
         goto cleanup;
     }
