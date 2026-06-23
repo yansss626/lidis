@@ -23,9 +23,11 @@ static void sig_handler(int sig) {
 }
 
 static int handle_event(void *ctx, void *data, size_t data_sz){
+
 	const struct tcp_event * e = (struct tcp_event *)data;
     if (e->ret <= 0) return 0;
 	printf("e->payload: %s\n", e->payload);
+
 	pthread_mutex_lock(&mutex);
 	for (int i = 0; i < global_slaves.size; i++) {
 		int fd = global_slaves.table[i].fd;
@@ -57,19 +59,18 @@ static int init_server(unsigned short port) {
 	}
 
 	listen(sockfd, 10);
-	//printf("listen finshed: %d\n", sockfd); // 3 
 
 	return sockfd;
-
 }
 
 void * server(void * arg){
 
 	int listenfd = init_server(SERVER_PORT);
 	if(listenfd < 0) return NULL;
+
 	struct sockaddr_in client_addr = {0};
 	socklen_t client_len = sizeof(struct sockaddr);
-	printf("listen_fd: %d\n", listenfd);	
+	
 	while(1){
 		int client_fd = accept(listenfd, (struct sockaddr *)&client_addr, &client_len);
 		if (client_fd < 0) {
@@ -87,6 +88,7 @@ void * server(void * arg){
 }
 
 int main() {
+
     struct  ring_buffer * rb = NULL;
     struct kvs_agent_bpf * skel = NULL;
     int err = 0;
@@ -119,10 +121,10 @@ int main() {
         err = -1;
         goto cleanup;
     }
+
     kvs_slaves_create(&global_slaves);
 	pthread_mutex_init(&mutex, NULL);
 	pthread_create(&pid, NULL, server, NULL);	
-
 
     while (!existing) {
         err = ring_buffer__poll(rb, 100);
@@ -142,12 +144,11 @@ int main() {
         ring_buffer__free(rb);
         kvs_agent_bpf__destroy(skel);
         kvs_slaves_destroy(&global_slaves);
+    
     return err;
-
 }
 
 int kvs_slaves_create(kvs_slaves * inst){
-
     if(inst == NULL) return -1;
     if(inst->table != NULL) return 0;
 
@@ -184,6 +185,7 @@ int kvs_slaves_insert(kvs_slaves * inst, int fd){
 int kvs_slaves_delete(kvs_slaves * inst, int fd){
     if(inst == NULL) return -1;
     if(inst->total == 0) return 0;
+
     int i = 0;
     for(; i < inst->size; i++){
         if(inst->table[i].fd == fd) {
@@ -197,7 +199,6 @@ int kvs_slaves_delete(kvs_slaves * inst, int fd){
 }
 
 int kvs_slaves_destroy(kvs_slaves * inst){
-
     if(inst == NULL) return -1;
     
     if (inst->table != NULL) {
