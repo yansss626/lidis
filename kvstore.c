@@ -626,7 +626,7 @@ int main(int argc, char *argv[]) {
 	
 	if(global_config.mode == 1){
 		if(0 != kvs_slave_sync()){
-			printf("failed to sync\n");
+			fprintf(stderr, "kvs_slave_sync error\n");
 		}
 	}
 
