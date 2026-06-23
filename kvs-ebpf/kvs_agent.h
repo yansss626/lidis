@@ -12,10 +12,10 @@ typedef struct kvs_slaves_s{
 
 }kvs_slaves;
 
-#define PAYLOAD_SIZE 1024
+#define BUFFER_SIZE (4 * 1024) // 4KB
+
 struct tcp_event {
-    
-    char payload[PAYLOAD_SIZE];
+    char payload[BUFFER_SIZE];
     int payload_len;
     int ret;
 };

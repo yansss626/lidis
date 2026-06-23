@@ -63,15 +63,13 @@ int BPF_PROG(tcp_recvmsg_exit, struct sock *sk, struct msghdr *msg, size_t len, 
     if (e == NULL) return 0;
     
 
-    if (payload_len > PAYLOAD_SIZE) {
-        payload_len = PAYLOAD_SIZE;
+    if (payload_len > BUFFER_SIZE) {
+        payload_len = BUFFER_SIZE;
     }
     
-    payload_len &= PAYLOAD_SIZE - 1; 
+    payload_len &= BUFFER_SIZE; 
 
     bpf_probe_read_user(e->payload, payload_len, (void *)(*ubuf_ptr));
-
-	e->payload[payload_len] = '\0';
     e->payload_len = payload_len;
     e->ret = ret;
     

@@ -2,7 +2,7 @@
 #include "kvstore.h"
 #include <arpa/inet.h>
 
-#define BUFFER_SIZE (16 * 1024) // 16KB
+#define BUFFER_SIZE (4 * 1024) // 4KB
 
 static msg_handler kvs_handler;
 
@@ -73,7 +73,14 @@ void server_reader(void *arg) {
 		client_info * cli_info = (client_info *)arg;
 		int ret = 0;
 		while(1){
-			if(cli_info->r_pos >= cli_info->r_cap) {
+			char recv_buf[BUFFER_SIZE] = {0};
+			ret = recv(cli_info->fd, recv_buf, BUFFER_SIZE, 0);
+
+			if (ret <= 0) {
+				break;
+			}
+
+			if(cli_info->r_pos + ret >= cli_info->r_cap) {
 				char * temp = (char *)kvs_realloc(cli_info->rbuf, 2 * cli_info->r_cap + 1);
                 if(temp == NULL) {
                     perror("kvs_realloc error");
@@ -82,14 +89,8 @@ void server_reader(void *arg) {
                 cli_info->rbuf = temp;
                 cli_info->r_cap *= 2;		
 			}
-			ret = recv(cli_info->fd, cli_info->rbuf + cli_info->r_pos, cli_info->r_cap - cli_info->r_pos, 0);
-
-			if (ret <= 0) {
-				break;
-			}
-			else {
-				cli_info->r_pos += ret;
-			}
+			memcpy(cli_info->rbuf + cli_info->r_pos, recv_buf, ret);
+			cli_info->r_pos += ret;
 			
 			if (cli_info->protocol == PROTO_UNKNOWN) {
 				int dp_ret = kvs_detect_protocol(cli_info);
@@ -103,7 +104,6 @@ void server_reader(void *arg) {
 				}
 			}
 			
-
 			while(cli_info->r_pos > 0) {
 				
 				int head_len = 0;
