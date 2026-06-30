@@ -63,10 +63,10 @@ int BPF_PROG(tcp_recvmsg_exit, struct sock *sk, struct msghdr *msg, size_t len, 
     if (e == NULL) return 0;
     
 
-    if (payload_len >= BUFFER_SIZE) {
-        payload_len = BUFFER_SIZE;
+    if (payload_len >= KVS_AGENT_PAYLOAD_SIZE) {
+        payload_len = KVS_AGENT_PAYLOAD_SIZE;
     } else {
-        payload_len &= (BUFFER_SIZE - 1);
+        payload_len &= (KVS_AGENT_PAYLOAD_SIZE - 1);
     }
 
     bpf_probe_read_user(e->payload, payload_len, (void *)(*ubuf_ptr));
