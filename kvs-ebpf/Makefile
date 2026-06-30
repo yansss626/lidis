@@ -125,6 +125,8 @@ $(patsubst %,$(OUTPUT)/%.o,$(BZS_APPS)): $(LIBBLAZESYM_OBJ)
 
 $(BZS_APPS): $(LIBBLAZESYM_OBJ)
 
+kvs_agent: $(OUTPUT)/kvs_agent_ds.o
+
 # Build application binary
 $(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
