@@ -296,3 +296,52 @@ char * kvs_build_kvsp_frame(int argc, const char * argv[], int * buf_len) {
     *buf_len = total_len;
     return buf;
 }
+
+int kvs_send_single_command(int sockfd, char * cmd) {
+    if (sockfd < 0 || cmd == NULL) return -1;
+
+    const char * argv[] = {cmd};
+    int msg_len = 0;
+    char * send_msg = kvs_build_kvsp_frame(1, argv, &msg_len);
+    if (send_msg == NULL || msg_len <= 0) {
+        fprintf(stderr, "kvs_build_kvsp_frame error\n");
+        return -2;
+    }
+
+    ssize_t n = send(sockfd, send_msg, msg_len, 0);
+    if (n != msg_len) {
+        fprintf(stderr, "kvs_send_single_command: n != msg_len\n");
+        kvs_free(send_msg);
+        return -2;
+    }
+
+    kvs_free(send_msg);
+
+    return 0;
+}
+
+int kvs_recv_single_command(int sockfd, char * tokens[], char * buf, size_t buf_size) {
+    if (sockfd < 0 || tokens == NULL || buf == NULL || buf_size == 0) return -1;
+
+    ssize_t n = recv(sockfd, buf, buf_size, 0);
+    if (n <= 0) {
+        if (n < 0) perror("recv");
+        return -2;
+    }
+
+    int head_len = 0;
+    int total_len = kvsp_parse_bulk_size(buf, n, &head_len);
+
+    if (total_len <= 0) return -2;
+
+    client_info cli = {0};
+    cli.cmd_hl = head_len;
+    cli.cmd_tl = total_len;
+    cli.rbuf = buf;
+    cli.protocol = PROTO_KVSP;
+
+    int count = kvs_split_token(&cli, tokens);
+    if (count < 0) return -2;
+
+    return count;
+}

@@ -18,21 +18,6 @@
 #define ENABLE_EBPF     1
 #define ENABLE_SEND     0
 
-
-#define KVS_SYNC_COMMAND               "SYNC"
-
-#define KVS_SLAVE_FULLSYNC_READY       "FULL SYNC READY"
-#define KVS_SLAVE_FULLSYNC_FINISHED    "FULL SYNC FINISHED"
-#define KVS_SLAVE_FULLSYNC_ERROR       "FULL SYNC ERROR" 
-
-#define KVS_MASTER_FULLSYNC_OK         "FULL SYNC OK %zu"
-#define KVS_MASTER_FULLSYNC_ERROR      "FULL SYNC ERROR"
-#define KVS_MASTER_FULLSYNC_BUSY       "FULL SYNC BUSY"
-
-
-#define KVS_SYNC_RET_ERROR      -100
-#define KVS_SYNC_RET_BUSY       -101
-
 static int is_full_sync = 0;    // 用于判断主端是否正在与某个从端进行全量同步
 
 extern kvs_conf_t global_config;
@@ -62,58 +47,38 @@ int kvs_connect_to_remote(const char * ip, unsigned int port) {
     return sockfd;
 }
 
-int kvs_send_single_command(int sockfd, char * cmd) {
-    if (sockfd < 0) return -1;
-
-    const char * argv[] = {cmd};
-    int msg_len = 0;
-    char * send_msg = kvs_build_kvsp_frame(1, argv, &msg_len);
-    if (send_msg == NULL || msg_len <= 0) {
-        fprintf(stderr, "kvs_build_kvsp_frame error\n");
-        return -2;
-    }
-
-    ssize_t n = send(sockfd, send_msg, msg_len, 0);
-    if (n != msg_len) {
-        fprintf(stderr, "kvs_send_single_command: n != msg_len\n");
-        kvs_free(send_msg);
-        return -2;
-    }
-
-    kvs_free(send_msg);
-
-    return 0;
-}
-
 static ssize_t kvs_slave_obtain_file_size(int sockfd) {
     if (sockfd < 0) return -1;
 
     if (kvs_send_single_command(sockfd, KVS_SYNC_COMMAND) != 0) {
+        fprintf(stderr, "kvs_send_single_command error\n");
         return -2;
     }
 
     // obtain snapshot file size
-    char recv_buf[BUFFER_SIZE] = {0};
-    ssize_t n = recv(sockfd, recv_buf, BUFFER_SIZE, 0);
-
-    if (n <= 0) {
+    char * tokens[KVS_MAX_TOKENS] = {0};
+    char buf[BUFFER_SIZE] = {0};
+    if (kvs_recv_single_command(sockfd, tokens, buf, BUFFER_SIZE) < 0) {
+        fprintf(stderr, "kvs_recv_single_command error\n");
         return -2;
     }
 
-    if (strcmp(recv_buf, KVS_MASTER_FULLSYNC_BUSY) == 0) {
+    char * command = tokens[0];
+
+    if (strcmp(command, KVS_MASTER_FULLSYNC_BUSY) == 0) {
         return KVS_SYNC_RET_BUSY;
     }
 
-    if (strcmp(recv_buf, KVS_MASTER_FULLSYNC_ERROR) == 0) {
+    if (strcmp(command, KVS_MASTER_FULLSYNC_ERROR) == 0) {
         return KVS_SYNC_RET_ERROR;
     }
 
     size_t file_size = 0;
 
-    if (sscanf(recv_buf, KVS_MASTER_FULLSYNC_OK, &file_size) != 1 || file_size > SSIZE_MAX) {
+    if (sscanf(command, KVS_MASTER_FULLSYNC_OK, &file_size) != 1 || file_size > SSIZE_MAX) {
         return KVS_SYNC_RET_ERROR;
     }
-    printf("msg: %s\n", recv_buf);
+
     return (ssize_t)file_size;
 
 }
@@ -140,8 +105,11 @@ static char * kvs_slave_obtain_file(ssize_t file_size, int sockfd, ssize_t * mod
 
 #elif ENABLE_SENDFILE
 
-        char * send_msg= KVS_SLAVE_FULLSYNC_READY;
-        send(sockfd, send_msg, strlen(send_msg), 0);
+        if (kvs_send_single_command(sockfd, KVS_SLAVE_FULLSYNC_READY) != 0) {
+            fprintf(stderr, "kvs_send_single_command error\n");
+            kvs_free(buf);
+            return NULL;
+        }        
 
         size_t received = 0;
         while (received < file_size) {
@@ -220,18 +188,17 @@ int kvs_slave_full_sync(int sockfd) {
     
 }
 
-int kvs_slave_incr_sync(int sockfd) {
-    if (sockfd < 0) return -1;
+int kvs_slave_incr_sync(int master_fd) {
+    if (master_fd < 0) return -1;
 
-    int recv_fd;
+    int recv_fd = -1;
 
 #if ENABLE_EBPF
-
-    close(sockfd);
 
     int agent_fd = kvs_connect_to_remote(global_config.agent_ip, global_config.agent_port);
     if (agent_fd < 0) {
         fprintf(stderr, "Error: agent_fd = %d\n", agent_fd);
+        close(master_fd);
         return -1;
     }
 
@@ -239,17 +206,26 @@ int kvs_slave_incr_sync(int sockfd) {
 
 #elif ENABLE_SEND
 
-    recv_fd = sockfd;
+    recv_fd = master_fd;
 
 #endif
 
-
 #if (NETWORK_SELECT == NETWORK_NTYCO)
+
     client_info * cli_info = client_info_init(recv_fd);
     cli_info->role = 1; // slave;
     nty_coroutine * read_co = NULL;
     nty_coroutine_create(&read_co, server_reader, cli_info);
+
 #endif 
+
+    int ret = kvs_send_single_command(master_fd, KVS_SLAVE_FULLSYNC_FINISHED);
+    if (ret != 0) {
+        if (recv_fd != master_fd) close(recv_fd);   // ebpf
+        close(master_fd);                           
+        return -2;
+    }
+    if (recv_fd != master_fd) close(master_fd);     //ebpf
 
     return 0;
 }
@@ -266,18 +242,19 @@ int kvs_slave_sync(){
     int ret = 0;
 
     ret = kvs_slave_full_sync(master_fd);
-    if (ret != 0 && ret != KVS_SYNC_RET_BUSY) {
+    if (ret == KVS_SYNC_RET_BUSY) {
         close(master_fd);
-        return -2;
+        return KVS_SYNC_RET_BUSY;
     }
 
-    ret = kvs_send_single_command(master_fd, KVS_SLAVE_FULLSYNC_FINISHED);
     if (ret != 0) {
         close(master_fd);
         return -2;
     }
 
-    if (kvs_slave_incr_sync(master_fd) != 0) {
+    ret = kvs_slave_incr_sync(master_fd);
+    if (ret != 0) {
+        close(master_fd);
         return -2;
     }
 
@@ -436,19 +413,24 @@ int kvs_master_notify_and_wait_slave(client_info * cli, size_t file_size) {
 
     char send_msg[BUFFER_SIZE] = {0};
     int msg_len = snprintf(send_msg, BUFFER_SIZE, KVS_MASTER_FULLSYNC_OK, file_size); // send file size
-    ssize_t n = send(cli->fd, send_msg, msg_len, 0);
-    if (n != msg_len) {
+    if (kvs_send_single_command(cli->fd, send_msg) != 0) {
+        fprintf(stderr, "kvs_send_single_command error\n");
         return -2;
-    }    
+    } 
 
     if (file_size == 0) return 0;
 
-    char recv_buf[BUFFER_SIZE] = {0};
-    n = recv(cli->fd, recv_buf, BUFFER_SIZE, 0); // recv slave info
+    char * tokens[KVS_MAX_TOKENS] = {0};
+    char buf[BUFFER_SIZE] = {0};
 
-    char * expected_reply = KVS_SLAVE_FULLSYNC_READY;
-    size_t reply_len = strlen(expected_reply);
-    if (n < reply_len || strncmp(recv_buf, expected_reply, reply_len) != 0) {
+    if (kvs_recv_single_command(cli->fd, tokens, buf, BUFFER_SIZE) < 0) {
+        fprintf(stderr, "kvs_recv_single_command error\n");
+        return -2;
+    }
+
+    char * command = tokens[0];
+
+    if (strcmp(command, KVS_SLAVE_FULLSYNC_READY) != 0) {
         return -2;
     }
 
@@ -462,7 +444,7 @@ int kvs_master_full_sync(client_info * cli) {
     if(cli == NULL) return -1;
 
     if (is_full_sync != 0) {
-        send(cli->fd, KVS_MASTER_FULLSYNC_BUSY, strlen(KVS_MASTER_FULLSYNC_BUSY), 0);
+        kvs_send_single_command(cli->fd, KVS_MASTER_FULLSYNC_BUSY);
         return 0;
     }
         

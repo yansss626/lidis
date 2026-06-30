@@ -82,6 +82,8 @@ int resp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
 int kvsp_parse_bulk_size(const char * buf, int buf_size, int * head_len);
 int kvs_detect_protocol(client_info * cli_info);
 char * kvs_build_kvsp_frame(int argc, const char * argv[], int * buf_len);
+int kvs_send_single_command(int sockfd, char * cmd);
+int kvs_recv_single_command(int sockfd, char * tokens[], char * buf, size_t buf_size);
 //
 
 // kvstore serialization protocol: kvsp
@@ -130,6 +132,20 @@ int kvs_master_full_sync(client_info * cli);
 int kvs_master_incr_sync(client_info * cli, char ** tokens, int count);
 int rdma_client(const char * server_ip, const char * port, char * ptr, size_t size);
 ssize_t rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd);
+
+#define KVS_SYNC_COMMAND               "SYNC"
+
+#define KVS_SLAVE_FULLSYNC_READY       "FULLSYNC READY"
+#define KVS_SLAVE_FULLSYNC_FINISHED    "FULLSYNC FINISHED"
+#define KVS_SLAVE_FULLSYNC_ERROR       "FULLSYNC ERROR" 
+
+#define KVS_MASTER_FULLSYNC_OK         "FULLSYNC OK %zu"
+#define KVS_MASTER_FULLSYNC_ERROR      "FULLSYNC ERROR"
+#define KVS_MASTER_FULLSYNC_BUSY       "FULLSYNC BUSY"
+
+
+#define KVS_SYNC_RET_ERROR      -100
+#define KVS_SYNC_RET_BUSY       -101
 // kvs_sync.c
 
 int kvs_config_init(kvs_conf_t *  conf);

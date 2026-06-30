@@ -5,14 +5,13 @@
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
+#include "kvstore.h"
 
 struct pdata{ // private data
     uint64_t buf_size; // remote buffer size 
     uint64_t raddr; // remote addr 
     uint32_t rkey; // remote key
 };
-
-#define KVS_SLAVE_FULLSYNC_READY       "FULL SYNC READY"
 
 #define MSG_LENGTH 32
 
@@ -187,8 +186,11 @@ ssize_t rdma_server(const char * port, char * rdma_buf, size_t size, int sockfd)
         goto cleanup;
     }
 
-    char * send_msg= KVS_SLAVE_FULLSYNC_READY;  // notify master rdma server is ready
-    send(sockfd, send_msg, strlen(send_msg), 0);
+    if (kvs_send_single_command(sockfd, KVS_SLAVE_FULLSYNC_READY) != 0) { // notify master rdma server is ready
+        fprintf(stderr, "kvs_send_single_command error\n");
+        ret = -2;
+        goto cleanup;
+    }  
 
     int get_request = 0;
     if(rdma_get_request(listen_id, &id) != 0){
