@@ -59,7 +59,7 @@ const char *command[] = {
 	"RSET", "RGET", "RDEL", "RMOD", "REXIST",
 	"HSET", "HGET", "HDEL", "HMOD", "HEXIST",
 	"LSET", "LGET", "LDEL", "LMOD", "LEXIST",
-	"SAVE", "SYNC", "COMMAND",
+	"SAVE", "SYNC", "FULLSYNC FINISHED", "COMMAND",
 };
 
 enum {
@@ -95,6 +95,7 @@ enum {
 
 	KVS_CMD_SAVE,
 	KVS_CMD_SYNC,
+	KVS_CMD_FULLSYNC_FINISHED,
 
 	KVS_CMD_COMMAND,
 
@@ -383,7 +384,9 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 			length = ret;
 		}
 		break;
-
+	case KVS_CMD_FULLSYNC_FINISHED:
+		
+		break;
 	case KVS_CMD_COMMAND:
 		reply = REPLY_COMMAND;
 		break;
