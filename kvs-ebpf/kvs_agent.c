@@ -506,7 +506,7 @@ void * kvs_agent(void * arg) {
 
         int ret = kvs_agent_send_to_slave(agent, buf, buf_len);
         if (ret != 0) {
-            exit(1);
+            fprintf(stderr, "kvs_agent_send_to_slave error\n");
             free(buf);
             existing = true;
             return NULL;
