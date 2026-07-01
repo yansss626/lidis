@@ -436,7 +436,10 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 	if(is_write_success == 1 && is_recovering == 0) {
 
 		kvs_log_write(tokens, count);
-		kvs_master_incr_sync(cli, tokens, count);
+		if (kvs_master_incr_sync(cli, tokens, count) != 0) {
+			fprintf(stderr, "kvs_master_incr_sync error\n");
+			return -2;
+		}
 	}
 
 	return length;
