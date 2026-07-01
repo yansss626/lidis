@@ -40,6 +40,8 @@ agent_cache global_agent_cache = {0};
 int global_slave_fd = -1;
 bool kvs_agent_is_init = false;
 
+static bool is_incr_send_ready = false;
+
 int kvs_agent_init();
 int kvs_agent_cache_create(agent_cache * ac, size_t cache_size);
 void kvs_agent_cache_destroy(agent_cache * ac);
@@ -515,6 +517,10 @@ int kvs_master_full_sync(client_info * cli) {
         goto cleanup;
     }
 
+#if ENABLE_SEND
+    is_incr_send_ready = true;
+#endif
+
     cleanup:
         if (fd >= 0) close(fd);
         if (ret != 0 && is_fullsync_ok_sent == 0) kvs_send_single_command(cli->fd, KVS_MASTER_FULLSYNC_ERROR);
@@ -547,6 +553,7 @@ int kvs_master_incr_sync(client_info * cli, char ** tokens, int count) {
 
     int ret = kvs_agent_cache_write(&global_agent_cache, buf, buf_len);
     if (ret != 0) {
+        pthread_mutex_unlock(&cache_mutex);
         fprintf(stderr, "kvs_agent_cache_write error\n");
         kvs_free(buf);
         return -2;
@@ -569,13 +576,14 @@ void * agent(void * arg) {
     while (1) {
         pthread_mutex_lock(&cache_mutex);
 
-        while (global_agent_cache.used == 0) {
+        while (global_agent_cache.used == 0 || is_incr_send_ready == false) {
             pthread_cond_wait(&cache_cond, &cache_mutex);
         }
 
         size_t buf_len = 0;
         char * buf = kvs_agent_cache_read(&global_agent_cache, &buf_len);
 
+        int fd = global_slave_fd;
         pthread_mutex_unlock(&cache_mutex);
 
         if (buf_len == 0 || buf == NULL) {
@@ -583,10 +591,6 @@ void * agent(void * arg) {
             free(buf);
             return NULL;
         }
-        
-        pthread_mutex_lock(&cache_mutex);		
-        int fd = global_slave_fd;
-        pthread_mutex_unlock(&cache_mutex);	
 
         if (fd < 0) {
             free(buf);
@@ -596,8 +600,15 @@ void * agent(void * arg) {
         ssize_t ret = send(fd, buf, buf_len, 0);
         if (ret <= 0) {
             if (ret < 0) perror("send");
-            close(global_slave_fd);
-            global_slave_fd = -1;
+
+            close(fd);
+
+            pthread_mutex_lock(&cache_mutex);
+            if (global_slave_fd == fd) {
+                global_slave_fd = -1;
+            }
+            pthread_mutex_unlock(&cache_mutex);
+
             free(buf);
             return NULL;
         }
