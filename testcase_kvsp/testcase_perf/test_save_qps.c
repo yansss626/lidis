@@ -127,7 +127,7 @@ void create_single_testcase(int fd, char * cmd) {
 
 void create_testcase(int fd, int count, char * cmd, int interval) {
 
-    for (int i = 0; i < count; i++) {
+    for (int i = 1; i <= count; i++) {
 
         char key[BUFFER_SIZE];
         char value[BUFFER_SIZE];
