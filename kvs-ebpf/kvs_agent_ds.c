@@ -196,7 +196,7 @@ char * kvs_agent_cache_read(agent_cache * ac, size_t * buf_len) {
     }
     size_t len = *buf_len;
 
-    if (len > ac->used - sizeof(size_t) || buf_len == 0) return NULL;
+    if (len > ac->used - sizeof(size_t) || len == 0) return NULL;
 
     // get buffer
     char * buf = (char *)malloc(len);
