@@ -588,7 +588,7 @@ void * agent(void * arg) {
         int fd = global_slave_fd;
         pthread_mutex_unlock(&cache_mutex);	
 
-        if (fd > 0) {
+        if (fd < 0) {
             free(buf);
             continue;
         }
