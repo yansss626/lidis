@@ -426,7 +426,7 @@ int kvs_filter_protocol(char **tokens, int count, client_info * cli) {
 		break;
 	}
 	case REPLY_NONE:
-		length = sprintf(cli->wbuf + cli->w_pos, "-ERR no such command\r\n");
+		length = sprintf(cli->wbuf + cli->w_pos, "-ERR no such command '%s'\r\n", tokens[0]);
 		break;
 	case REPLY_COMMAND:
 		length = sprintf(cli->wbuf + cli->w_pos, "*0\r\n");
