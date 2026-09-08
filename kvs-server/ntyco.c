@@ -61,7 +61,6 @@ void echo_server(void *arg) {
 
     
 cleanup:
-    printf("client close fd: %d\n", cli_info->fd);
     close(cli_info->fd);
     if(cli_info->rbuf != NULL) kvs_free(cli_info->rbuf);
     if(cli_info->wbuf != NULL) kvs_free(cli_info->wbuf);
@@ -134,7 +133,6 @@ void server_reader(void *arg) {
 
 				char temp = cli_info->rbuf[total_len];
 				cli_info->rbuf[total_len] = '\0';
-				//printf("%s\n", cli_info->rbuf);
 
 				int slen = kvs_handler(cli_info);
 				cli_info->rbuf[total_len] = temp;
@@ -191,7 +189,6 @@ void server(void *arg) {
 	bind(fd, (struct sockaddr*)&local, sizeof(struct sockaddr_in));
 
 	listen(fd, 20);
-	printf("listen port : %d\n", port);
 
 
 	while (1) {
